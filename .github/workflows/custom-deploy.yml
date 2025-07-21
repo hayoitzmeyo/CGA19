@@ -3,19 +3,34 @@ name: custom deploy
 on:
   push:
     branches:
-      - main  
+      - main
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: dlf
+
+      - name: Debug
+        run: |
+          echo "Current directory: $(pwd)"
+          echo "Directory tree:"
+          ls -lahR
+
+      - name: Check 
+        run: |
+          if [ ! -d "127.0.0.1_8081/dl" ]; then
+            echo "ERROR: 127.0.0.1_8081/dl directory not found!"
+            exit 1
+          fi
+          echo "Contents of 127.0.0.1_8081/dl:"
+          ls -lah 127.0.0.1_8081/dl
+
+      - name: deploy
         run: |
           mkdir deploy
-          cp -r dl/* deploy/
-      - name: Deploy
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./deploy
+          # Use . instead of * to get all files, including dotfiles
+          cp -r 127.0.0.1_8081/dl/. deploy/
+
+      - name: h-pages
+        uses: peaceiris/actions-gh-pages@
