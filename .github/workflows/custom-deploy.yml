@@ -5,6 +5,11 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -14,7 +19,6 @@ jobs:
       - name: Debug
         run: |
           echo "Current directory: $(pwd)"
-          echo "Directory tree:"
           ls -lahR
 
       - name: Check 
@@ -26,14 +30,16 @@ jobs:
           echo "Contents of 127.0.0.1_8081/dl:"
           ls -lah 127.0.0.1_8081/dl
 
-      - name: deploy
+      - name: deploy (copy files)
         run: |
           mkdir deploy
-          # Use . instead of * to get all files, including dotfiles
           cp -r 127.0.0.1_8081/dl/. deploy/
 
-      - name: h-pages
-        uses: peaceiris/actions-gh-pages@v4
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./deploy
+          path: ./deploy
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
