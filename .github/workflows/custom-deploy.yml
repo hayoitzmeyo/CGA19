@@ -1,4 +1,4 @@
-name: custom deploy
+name: Deploy to GitHub Pages
 
 on:
   push:
@@ -13,29 +13,30 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Debug
-        run: |
-          echo "Current directory: $(pwd)"
-          ls -lahR
+      - name: List repo files (debug)
+        run: ls -lR
 
-      - name: Check 
-        run: |
-          if [ ! -d "127.0.0.1_8081/dl" ]; then
-            echo "ERROR: 127.0.0.1_8081/dl directory not found!"
-            exit 1
-          fi
-          echo "Contents of 127.0.0.1_8081/dl:"
-          ls -lah 127.0.0.1_8081/dl
-
-      - name: deploy (copy files)
+      - name: Prepare deploy directory
         run: |
           mkdir deploy
+          # Copy your main site files
           cp -r 127.0.0.1_8081/dl/. deploy/
+          # Copy all your assets folders from repo root
+          cp -r NrNzJ3KcpPiT.com deploy/
+          cp -r TT9B59GHtmHo.com deploy/
+          cp -r TrNlwF50oBkG.com deploy/
+          cp -r WMTTk26loLz8.com deploy/
+          cp -r bnqOA0GmSrFn.com deploy/
+          cp -r psFJ2CW0GE9f.com deploy/
+          # Disable Jekyll so _folders and dotfiles are preserved
+          touch deploy/.nojekyll
 
-      - name: Upload artifact
+      - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: ./deploy
