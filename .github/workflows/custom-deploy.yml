@@ -1,0 +1,21 @@
+name: custom deploy
+
+on:
+  push:
+    branches:
+      - main  
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: dlf
+        run: |
+          mkdir deploy
+          cp -r dl/* deploy/
+      - name: Deploy
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./deploy
