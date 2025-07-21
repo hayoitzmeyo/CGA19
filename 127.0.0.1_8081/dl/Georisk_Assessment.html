@@ -139,57 +139,73 @@
 <div id="results" style="margin-top: 20px;"></div>
 
 <script>
-const form = document.getElementById('risk-form');
-const resultsDiv = document.getElementById('results');
-const addressInput = document.getElementById('address');
-const submitBtn = document.getElementById('submit-btn');
-
-submitBtn.textContent = 'Enter Your Address To Get Started';
-
-addressInput.addEventListener('input', function() {
-  if (this.value.trim().length > 0) {
-      submitBtn.textContent = "Start My Property's Risk Assessment";
-  } else {
-      submitBtn.textContent = 'Enter Your Address To Get Started';
-  }
-});
-form.addEventListener('submit', async (e) => {
-e.preventDefault();
-const address = document.getElementById('address').value;
-try {
-  const response1 = await fetch('http://localhost:2000/risk-summary', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ address })
+  const form = document.getElementById('risk-form');
+  const resultsDiv = document.getElementById('results');
+  const addressInput = document.getElementById('address');
+  const submitBtn = document.getElementById('submit-btn');
+  
+  const BACKEND_URL = 'https://cga19.onrender.com';
+  
+  submitBtn.textContent = 'Enter Your Address To Get Started';
+  
+  addressInput.addEventListener('input', function() {
+    if (this.value.trim().length > 0) {
+        submitBtn.textContent = "Start My Property's Risk Assessment";
+    } else {
+        submitBtn.textContent = 'Enter Your Address To Get Started';
+    }
   });
-  const data1 = await response1.json();
-  const response2 = await fetch('http://localhost:3000/risk-summary', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ address })
+  
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const address = addressInput.value.trim();
+    if (!address) return;
+    resultsDiv.innerHTML = "<p>Loading your personalized risk assessment...</p>";
+  
+    try {
+      const response1 = await fetch(`${BACKEND_URL}/risk-summary`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address })
+      });
+      const data1 = await response1.json();
+      
+  
+      const response2 = await fetch(`${BACKEND_URL}/fire-risk-summary`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address })
+      });
+      const data2 = await response2.json();
+  
+      if (response1.ok && response2.ok) {
+        resultsDiv.innerHTML = `
+          <h2>Risk Summary:</h2>
+          <p><strong>Burn Risk:</strong> ${data2.harprobability ?? 'N/A'}</p>
+          <p><strong>Housing Unit Risk:</strong> ${data2.normhurisk ?? 'N/A'}</p>
+          <p><strong>Suppression Index:</strong> ${data2.normsdi ?? 'N/A'}</p>
+          <p><strong>Normalized Fire Density:</strong> ${data2.normfiredensity ?? 'N/A'}</p>
+          <p><strong>General Weighted Fire Risk:</strong> ${data2.generalweightedrisk ?? 'N/A'}</p>
+          <p><strong>Flood Risk:</strong> ${data1.floodRisk ?? 'N/A'}</p>
+          <p><strong>Crime Risk:</strong> ${data1.crimeRate ?? 'N/A'}</p>
+          <p><strong>AQI:</strong> ${data1.airQualityIndex ?? 'N/A'}</p>
+          <p><strong>Recommendations:</strong></p>
+          <ul>
+            ${(Array.isArray(data1.recommendations) ? data1.recommendations : [])
+              .map(r => `<li>${r}</li>`).join('')}
+          </ul>
+        `;
+      } else {
+        let errorMsg = (data1.error || data2.error || 'Error contacting the server.');
+        resultsDiv.innerHTML = `<p style="color: red;">${errorMsg}</p>`;
+      }
+  
+    } catch (err) {
+      resultsDiv.innerHTML = `<p style="color: red;">Error: ${err.message}</p>`;
+    }
   });
-  const data2 = await response2.json();
-  resultsDiv.innerHTML = `
-    <h2>Risk Summary:</h2>
-    <p><strong>Burn Risk:</strong> ${data2.harprobability ?? 'N/A'}</p>
-    <p><strong>Housing Unit Risk:</strong> ${data2.normhurisk ?? 'N/A'}</p>
-    <p><strong>Suppression Index:</strong> ${data2.normsdi ?? 'N/A'}</p>
-    <p><strong>Normalized Fire Density:</strong> ${data2.normfiredensity ?? 'N/A'}</p>
-    <p><strong>General Weighted Fire Risk:</strong> ${data2.generalweightedrisk ?? 'N/A'}</p>
-    <p><strong>Flood Risk:</strong> ${data1.floodRisk ?? 'N/A'}</p>
-    <p><strong>Crime Risk:</strong> ${data1.crimeRate ?? 'N/A'}</p>
-    <p><strong>AQI:</strong> ${data1.airQualityIndex ?? 'N/A'}</p>
-    <p><strong>Recommendations:</strong></p>
-    <ul>
-      ${(Array.isArray(data1.recommendations) ? data1.recommendations : [])
-        .map(r => `<li>${r}</li>`).join('')}
-    </ul>
-  `;
-} catch (err) {
-  resultsDiv.innerHTML = `<p style="color: red;">Error: ${err.message}</p>`;
-}
-});
-</script>
+  </script>
+  
 
 <div id="results" style="margin-top: 20px;"></div>
 				</div>
