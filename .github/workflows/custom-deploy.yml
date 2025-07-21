@@ -15,25 +15,19 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: List repo files (debug)
-        run: ls -lR
+      - uses: actions/checkout@v4
 
       - name: Prepare deploy directory
         run: |
           mkdir deploy
-          # Copy your main site files
-          cp -r 127.0.0.1_8081/dl/. deploy/
-          # Copy all your assets folders from repo root
+
+          cp -r 127.0.0.1_8081/dl/. deploy/  # core html & site content (if used)
           cp -r NrNzJ3KcpPiT.com deploy/
           cp -r TT9B59GHtmHo.com deploy/
           cp -r TrNlwF50oBkG.com deploy/
           cp -r WMTTk26loLz8.com deploy/
           cp -r bnqOA0GmSrFn.com deploy/
           cp -r psFJ2CW0GE9f.com deploy/
-          # Disable Jekyll so _folders and dotfiles are preserved
           touch deploy/.nojekyll
 
       - name: Upload Pages artifact
