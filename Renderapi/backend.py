@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 import requests
 
-bp = Blueprint("air_flood_quake", __name__)
+bp = Blueprint("backend", __name__)
 
 def get_coordinates(address):
     url = f"https://nominatim.openstreetmap.org/search?q={address}&format=json&limit=1"
