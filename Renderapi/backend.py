@@ -1,9 +1,7 @@
-from flask import Flask, request, jsonify
-from flask_cors import CORS
+from flask import Blueprint, request, jsonify
 import requests
 
-app = Flask(__name__)
-CORS(app)
+bp = Blueprint("air_flood_quake", __name__)
 
 def get_coordinates(address):
     url = f"https://nominatim.openstreetmap.org/search?q={address}&format=json&limit=1"
@@ -28,26 +26,17 @@ def get_flood_risk(lat, lon):
     }
     response = requests.get(url, params=params)
     data = response.json()
-
-    # Get latest river discharge value
     river_discharge = data['daily']['river_discharge'][0]
-
-    # Simple risk assessment based on discharge threshold
     if river_discharge > 200:
         risk = "High"
     elif river_discharge > 100:
         risk = "Moderate"
     else:
         risk = "Low"
-
     return risk
 
-import requests
-import pandas as pd
-
-
-url = "https://earthquake.usgs.gov/ws/designmaps/asce7-22.json"
 meta_url = "https://earthquake.usgs.gov/ws/designmaps/metadata.json"
+earthquake_url = "https://earthquake.usgs.gov/ws/designmaps/asce7-22.json"
 def get_siteClass(lat, lon):
     params = {
         "latitude": lat,
@@ -55,7 +44,6 @@ def get_siteClass(lat, lon):
         "referenceDocument": "ASCE7-16"
     }
     response = requests.get(meta_url, params=params)
-    print(response.status_code)
     if response.status_code != 200:
         raise RuntimeError(f"HTTP {response.status_code} returned for metadata.json: {response.text[:200]}")
     data = response.json()
@@ -81,16 +69,12 @@ def get_earthquake_risk(lat, lon, siteClass, riskCategory, title):
         "riskCategory": riskCategory,
         "title": title
     }
-    response = requests.get(url, params = params)
+    response = requests.get(earthquake_url, params = params)
     data = response.json()
-    #print(data)
-    hazard_list = data["response"]["data"]["underlyingData"]["pgauh"]
-    return hazard_list
-    #print(data)
     hazard_list = data["response"]["data"]["underlyingData"]["pgauh"]
     return hazard_list
 
-@app.route('/risk-summary', methods=['POST'])
+@bp.route('/risk-summary', methods=['POST'])
 def risk_summary():
     try:
         data = request.json
@@ -98,18 +82,17 @@ def risk_summary():
         coords = get_coordinates(address)
         if not coords:
             return jsonify({"error": "Address not found"}), 400
-
         lat, lon = coords
         aqi = get_air_quality(lat, lon)
         flood_risk = get_flood_risk(lat, lon)
         site_class = get_siteClass(lat, lon)
         earthquake_risk = get_earthquake_risk(lat, lon, site_class, "III", "Risk")
         return jsonify({
-            "wildfireRisk": "Mock",  
+            "wildfireRisk": "Mock",
             "floodRisk": flood_risk,
-            "crimeRate": "Mock",    
+            "crimeRate": "Mock",
             "airQualityIndex": aqi,
-            "earthquakeRisk": earthquake_risk, 
+            "earthquakeRisk": earthquake_risk,
             "recommendations": [
                 "Install smoke detectors",
                 "Consider flood insurance",
@@ -120,6 +103,3 @@ def risk_summary():
     except Exception as e:
         print("Error in /risk-summary:", e)
         return jsonify({"error": str(e)}), 500
-
-if __name__ == '__main__':
-    app.run(port=2000)

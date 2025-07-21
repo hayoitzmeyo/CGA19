@@ -1,12 +1,10 @@
-from flask import Flask, request, jsonify
-from flask_cors import CORS
+from flask import Blueprint, request, jsonify
 import requests
 import pyproj
 import numpy as np
 import math
 
-app = Flask(__name__)
-CORS(app)
+bp = Blueprint("firealg", __name__)
 
 def latlontowebmercator(lat, lon):
     transformer = pyproj.Transformer.from_crs("EPSG:4326", "EPSG:3857", always_xy=True)
@@ -24,7 +22,6 @@ def normalizesdi(sdi, high_cutoff=40, min_sdi=0):
     normalized = (sdi - min_sdi) / (high_cutoff - min_sdi)
     return min(normalized, 1.0)
 
-
 def get_coordinates(address):
     url = f"https://nominatim.openstreetmap.org/search?q={address}&format=json&limit=1"
     response1 = requests.get(url, headers={"User-Agent": "risk-app"})
@@ -34,7 +31,6 @@ def get_coordinates(address):
     return float(data[0]['lat']), float(data[0]['lon'])
 
 def gethousingunitrisk(lat, lon):
-    #risk for INDIVIDUAL establishment, could parse in spread like burn probability but this one returns valid data for all pixels so no biggie
     url = "https://apps.fs.usda.gov/fsgisx01/rest/services/RDW_Wildfire/RMRS_WRC_HousingUnitRisk/ImageServer/identify"
     x, y = latlontowebmercator(lat, lon)
     geometry = {"x": x, "y": y}
@@ -65,7 +61,6 @@ def gethousingunitrisk(lat, lon):
                 continue
     return None
 
-
 def getburnprobability(lat, lon):
     url = "https://apps.fs.usda.gov/fsgisx01/rest/services/RDW_Wildfire/RMRS_WRC_WildfireHazardPotential/ImageServer/identify"
     x, y = latlontowebmercator(lat, lon)
@@ -83,7 +78,6 @@ def getburnprobability(lat, lon):
     response = requests.get(url, params=params)
     data = response.json()
     value = data.get('value')
-    #parse through set of integers until real number
     try:
         if value is not None and value != "NoData":
             return float(value)
@@ -98,14 +92,12 @@ def getburnprobability(lat, lon):
                 continue
     return None
 
-
 def normalizefirecount(firecount, radius_km=60, years=5, min_density=0, max_density=0.00049):
     area_km2 = math.pi * (radius_km ** 2)
     annual_density = firecount / (area_km2 * years)
     normalized = (annual_density - min_density) / (max_density - min_density)
     normalized = max(0, min(normalized, 1)) 
     return normalized
-
 
 def quantilenormalizer(burnprob, high_risk_cutoff, min_burnprob):
     if burnprob is None or burnprob == "NoData":
@@ -118,36 +110,7 @@ def quantilenormalizer(burnprob, high_risk_cutoff, min_burnprob):
     normalized = (burnprob - min_burnprob) / (high_risk_cutoff - min_burnprob)
     return min(normalized, 1.0)
 
-def searchburnprobfast(lat, lon, radius_km=20):
-    # searches in 3x3 matrix
-    import math
-    offsets = [
-        (0, 0),  
-        (radius_km/111, 0),  
-        (-radius_km/111, 0),
-        (0, radius_km/111), 
-        (0, -radius_km/111), 
-        (radius_km/111/math.sqrt(2), radius_km/111/math.sqrt(2)),   
-        (radius_km/111/math.sqrt(2), -radius_km/111/math.sqrt(2)),  
-        (-radius_km/111/math.sqrt(2), radius_km/111/math.sqrt(2)),  
-        (-radius_km/111/math.sqrt(2), -radius_km/111/math.sqrt(2)), 
-    ]
-    for dlat, dlon in offsets:
-        lat2 = lat + dlat
-        lon2 = lon + dlon
-        burnprob = getburnprobability(lat2, lon2)
-        if burnprob is not None and burnprob != "NoData":
-            try:
-                return float(burnprob)
-            except:
-                continue
-    return None
-
-
 def historicalfiredensity(lat, lon, radius_km=60):
-    """
-    Returns the number of fire perimeters that intersect the given point (within optional buffer radius).
-    """
     url = "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_FireOccurrenceAndPerimeter_01/MapServer/8/query"
     params = {
         "where": "1=1",
@@ -155,7 +118,7 @@ def historicalfiredensity(lat, lon, radius_km=60):
         "geometryType": "esriGeometryPoint",
         "inSR": 4326,
         "spatialRel": "esriSpatialRelIntersects",
-        "distance": radius_km * 1000,  # meters
+        "distance": radius_km * 1000,
         "units": "esriSRUnit_Meter",
         "returnCountOnly": "true",
         "f": "json"
@@ -183,7 +146,6 @@ def getsuppressiondifficulty(lat, lon, radiuskm=60):
     }
     response = requests.get(url, params=params)
     data = response.json()
-
     values = []
     if 'properties' in data and 'Values' in data['properties']:
         for v in data['properties']['Values']:
@@ -192,7 +154,6 @@ def getsuppressiondifficulty(lat, lon, radiuskm=60):
                     values.append(float(v))
             except:
                 continue
-
     if values:
         return max(values)
     else:
@@ -204,10 +165,8 @@ def getsuppressiondifficulty(lat, lon, radiuskm=60):
             pass
     return None
 
-
-
-@app.route('/risk-summary', methods=['POST'])
-def risk_summary():
+@bp.route('/fire-risk-summary', methods=['POST'])
+def fire_risk_summary():
     try:
         data = request.json
         address = data.get('address')
@@ -236,8 +195,5 @@ def risk_summary():
             "generalweightedrisk": generalweightedrisk
         })
     except Exception as e:
-        print("Error in /risk-summary:", e)
+        print("Error in /fire-risk-summary:", e)
         return jsonify({"error": str(e)}), 500
-
-if __name__ == '__main__':
-    app.run(port=3000)
