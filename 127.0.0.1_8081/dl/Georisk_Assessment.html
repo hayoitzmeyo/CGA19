@@ -1,7 +1,6 @@
 <!DOCTYPE html><html><head>
   <meta charset="UTF-8">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <meta name="generator" content="Mobirise v5.9.13, a.mobirise.com">
   <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1">
   <link rel="shortcut icon" href="../../WMTTk26loLz8.com/1567989/assets/images/eNtGpq2bWEnr.jpg" type="image/x-icon">
   <meta name="description" content="">
@@ -141,18 +140,19 @@
 <script>
   const form = document.getElementById('risk-form');
   const resultsDiv = document.getElementById('results');
+  const spinnerDiv = document.getElementById('loading-spinner');
   const addressInput = document.getElementById('address');
   const submitBtn = document.getElementById('submit-btn');
   
-  const BACKEND_URL = 'https://cga19.onrender.com';
+  const BACKEND_URL = 'https://cga19.onrender.com';  
   
   submitBtn.textContent = 'Enter Your Address To Get Started';
   
   addressInput.addEventListener('input', function() {
     if (this.value.trim().length > 0) {
-        submitBtn.textContent = "Start My Property's Risk Assessment";
+      submitBtn.textContent = "Start My Property's Risk Assessment";
     } else {
-        submitBtn.textContent = 'Enter Your Address To Get Started';
+      submitBtn.textContent = 'Enter Your Address To Get Started';
     }
   });
   
@@ -160,7 +160,8 @@
     e.preventDefault();
     const address = addressInput.value.trim();
     if (!address) return;
-    resultsDiv.innerHTML = "<p>Loading your personalized risk assessment...</p>";
+    spinnerDiv.style.display = "block"; 
+    resultsDiv.innerHTML = ""; 
   
     try {
       const response1 = await fetch(`${BACKEND_URL}/risk-summary`, {
@@ -169,7 +170,6 @@
         body: JSON.stringify({ address })
       });
       const data1 = await response1.json();
-      
   
       const response2 = await fetch(`${BACKEND_URL}/fire-risk-summary`, {
         method: 'POST',
@@ -178,34 +178,33 @@
       });
       const data2 = await response2.json();
   
-      if (response1.ok && response2.ok) {
-        resultsDiv.innerHTML = `
-          <h2>Risk Summary:</h2>
-          <p><strong>Burn Risk:</strong> ${data2.harprobability ?? 'N/A'}</p>
-          <p><strong>Housing Unit Risk:</strong> ${data2.normhurisk ?? 'N/A'}</p>
-          <p><strong>Suppression Index:</strong> ${data2.normsdi ?? 'N/A'}</p>
-          <p><strong>Normalized Fire Density:</strong> ${data2.normfiredensity ?? 'N/A'}</p>
-          <p><strong>General Weighted Fire Risk:</strong> ${data2.generalweightedrisk ?? 'N/A'}</p>
-          <p><strong>Flood Risk:</strong> ${data1.floodRisk ?? 'N/A'}</p>
-          <p><strong>Crime Risk:</strong> ${data1.crimeRate ?? 'N/A'}</p>
-          <p><strong>AQI:</strong> ${data1.airQualityIndex ?? 'N/A'}</p>
-          <p><strong>Recommendations:</strong></p>
-          <ul>
-            ${(Array.isArray(data1.recommendations) ? data1.recommendations : [])
-              .map(r => `<li>${r}</li>`).join('')}
-          </ul>
-        `;
-      } else {
-        let errorMsg = (data1.error || data2.error || 'Error contacting the server.');
-        resultsDiv.innerHTML = `<p style="color: red;">${errorMsg}</p>`;
-      }
+      // Save results
+      localStorage.setItem('georisk_results_data1', JSON.stringify(data1));
+      localStorage.setItem('georisk_results_data2', JSON.stringify(data2));
+      localStorage.setItem('georisk_address', address);
+  
+      // Redirect to results page
+      window.location.href = './Georisk_Assessment_Results.html';
   
     } catch (err) {
+      spinnerDiv.style.display = "none"; // Hide loading spinner
       resultsDiv.innerHTML = `<p style="color: red;">Error: ${err.message}</p>`;
     }
   });
   </script>
   
+  
+  
+<div id="loading-spinner" style="display:none; margin-top:20px; text-align:center;">
+  <div class="spinner" style="display:inline-block;width:48px;height:48px;border:5px solid #eee;border-top-color:#4285F4;border-radius:50%;animation:spin 1s linear infinite;"></div>
+  <p style="margin:10px 0 0 0;color:#333;">Loading your personalized risk assessment...</p>
+</div>
+
+<style>
+@keyframes spin {
+  to { transform: rotate(360deg);}
+}
+</style>
 
 <div id="results" style="margin-top: 20px;"></div>
 				</div>
