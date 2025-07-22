@@ -74,19 +74,19 @@
 </head>
 <script>
 	window.addEventListener('DOMContentLoaded', function () {
-	  // Retrieve data from localStorage
+
 	  const data1 = JSON.parse(localStorage.getItem('georisk_results_data1') || 'null');
 	  const data2 = JSON.parse(localStorage.getItem('georisk_results_data2') || 'null');
 	  const address = localStorage.getItem('georisk_address') || '';
 	
-	  // Fallback if nothing is stored
+
 	  if (!data1 || !data2) {
 		document.getElementById('georisk-results-summary').innerHTML =
 		  '<p style="color:red;">No results found. Please <a href="./Georisk_Assessment.html">return to the Assessment page.</a></p>';
 		return;
 	  }
 	
-	  // Format/Render summary block
+	
 	  document.getElementById('georisk-results-summary').innerHTML = `
 		<h4 class="mbr-section-title mbr-fonts-style mb-4 display-5" style="text-align:center;">
 		  <strong>Results for</strong> <i>${address}</i>
@@ -138,7 +138,7 @@
 		
 		function fireNittyGrittyAnalysis(data2) {
 		  let html = `<p><strong>Model Details:</strong></p><ul>`;
-		  if ('burnprob' in data2)    html += `<li><b>Burn Probability Index:</b> ${data2.burnprob}</li>`;
+		  if ('harprobability' in data2)    html += `<li><b>Burn Probability Index:</b> ${data2.harprobability}</li>`;
 		  if ('normhurisk' in data2)  html += `<li><b>Housing Unit Risk:</b> ${data2.normhurisk}</li>`;
 		  if ('normsdi' in data2)     html += `<li><b>Suppression Difficulty Index:</b> ${data2.normsdi}</li>`;
 		  if ('normfiredensity' in data2) html += `<li><b>Normalized Fire Density:</b> ${data2.normfiredensity}</li>`;
