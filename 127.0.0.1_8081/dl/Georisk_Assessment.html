@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1">
   <link rel="shortcut icon" href="../../WMTTk26loLz8.com/1567989/assets/images/eNtGpq2bWEnr.jpg" type="image/x-icon">
   <title>Georisk: Assessment</title>
-  <!-- Stylesheets from your original -->
+
   <link rel="stylesheet" href="../../WMTTk26loLz8.com/1567989/assets/web/assets/mobirise-icons2/mobirise2_rnd%3D1749854789041.css">
   <link rel="stylesheet" href="../../WMTTk26loLz8.com/1567989/assets/bootstrap/css/bootstrap.min_rnd%3D1749854789041.css">
   <link rel="stylesheet" href="../../WMTTk26loLz8.com/1567989/assets/bootstrap/css/bootstrap-grid.min_rnd%3D1749854789041.css">
@@ -17,7 +17,14 @@
   <link rel="preload" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;700&display=swap&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
   <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;700&display=swap&display=swap"></noscript>
   <link rel="stylesheet" href="../../WMTTk26loLz8.com/1567989/assets/css/mbr-additional_rnd%3D1749854789041.css" type="text/css">
-
+  <style>
+    @keyframes spin { to { transform: rotate(360deg);} }
+    .navbar-fixed-top { top: auto; }
+    #loading-bar-wrapper,
+    #loading-bar-wrapper * {
+      color: #fff !important;
+    }
+  </style>
 <style>
 @keyframes spin { to { transform: rotate(360deg);} }
 .navbar-fixed-top { top: auto; }
@@ -160,7 +167,7 @@ form.addEventListener('submit', async (e) => {
     loadingBar.style.width = "100%";
     loadingBarText.textContent = "Assessment complete!";
 
-    // Short delay for user to see completion
+
     setTimeout(() => {
       window.location.href = './Georisk_Assessment_Results.html';
     }, 300);
@@ -168,7 +175,6 @@ form.addEventListener('submit', async (e) => {
     loadingBarText.textContent = "Error: " + err.message;
     loadingBar.style.background = "#D32F2F";
     loadingBar.style.width = "100%";
-    // Optionally show error elsewhere
     resultsDiv.innerHTML = `<p style="color: red;">Error: ${err.message}</p>`;
   }
 });
