@@ -194,7 +194,7 @@ def get_earthquake_risk(lat, lon):
     #get_faultDis(lat, lon)
     pgauh = get_pgauh(lat, lon)
     lhasaRisk = get_lhasaRisk(lat, lon, 0.01) #already normalized between 0 and 1
-    print(square_root_transform(faultDis, pgauh, lhasaRisk))
+    return square_root_transform(faultDis, pgauh, lhasaRisk)
 
 @bp.route('/risk-summary', methods=['POST'])
 def risk_summary():
@@ -207,7 +207,6 @@ def risk_summary():
         lat, lon = coords
         aqi = get_air_quality(lat, lon)
         flood_risk = get_flood_risk(lat, lon)
-        site_class = get_siteClass(lat, lon)
         landslide_risk = get_lhasaRisk(lat, lon)
         earthquake_risk = get_earthquake_risk(lat, lon)
         return jsonify({
