@@ -106,7 +106,7 @@
 	  document.getElementById('wildfire-risk-value').textContent = data2.generalweightedrisk ?? data2.harprobability ?? 'N/A';
 	  document.getElementById('flood-risk-value').textContent = data1.floodRisk ?? 'N/A';
 	  document.getElementById('landslide-risk-value').textContent = "Feature coming soon";
-	  document.getElementById('earthquake-risk-value').textContent =
+	  document.getElementById('earthquake-risk-value').textContent =data1.earthquakeRisk; 
 		Array.isArray(data1.earthquakeRisk)
 		  ? (data1.earthquakeRisk.join(', ') || 'N/A')
 		  : (data1.earthquakeRisk ?? 'N/A');
