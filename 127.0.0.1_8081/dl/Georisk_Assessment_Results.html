@@ -105,8 +105,8 @@
 	
 	  document.getElementById('wildfire-risk-value').textContent = data2.generalweightedrisk ?? data2.harprobability ?? 'N/A';
 	  document.getElementById('flood-risk-value').textContent = data1.floodRisk ?? 'N/A';
-	  document.getElementById('landslide-risk-value').textContent = "Feature coming soon";
-	  document.getElementById('earthquake-risk-value').textContent =data1.earthquakeRisk; 
+	  document.getElementById('landslide-risk-value').textContent = data1.earthquakeRisk ?? 'N/A';
+	  document.getElementById('earthquake-risk-value').textContent =data1.earthquakeRisk ?? 'N/A'; 
 		Array.isArray(data1.earthquakeRisk)
 		  ? (data1.earthquakeRisk.join(', ') || 'N/A')
 		  : (data1.earthquakeRisk ?? 'N/A');
@@ -155,16 +155,23 @@
 			? data2.generalweightedrisk
 			: Number(data2.generalweightedrisk);
 		  if (isNaN(fireScore)) fireScore = null;
+			
+	      let landslideScore = typeof data1.landslideRisk === "number"
+			? data1.landslideRisk
+			: Number(data1.landslideRisk);
+		  if (isNaN(landslideScore)) landslideScore = null;
 
 		  const riskLevel = getRiskLevel(fireScore);
 		  document.getElementById('wildfire-risk-level').textContent = riskLevel;
-		
+		  
 		  const details = fireNittyGrittyAnalysis(data2) +
 			  `<p style="margin-top:12px;"><strong>What this means:</strong> ${getRiskExplanation(riskLevel)}</p>`;
 		  document.getElementById('wildfire-risk-details').innerHTML = details;
 
 		  document.getElementById('wildfire-risk-score').textContent =
 			(fireScore !== null ? fireScore.toFixed(2) : 'N/A');
+		  document.getElementbyId('landslide-risk-score').textcontent = 
+			(landslideScore !== null ? landslideScore.toFixed(2): 'N/A'); 
 		  document.getElementById('wildfire-score-context').innerHTML =
 			  `<small>Your score is computed on a normalized scale from 0 (lowest fire risk) to 1 (highest fire risk). "${riskLevel}" means a score ${
 				riskLevel === "Low" ? "under 0.33" : riskLevel === "Medium" ? "between 0.33 and 0.66" : "over 0.66"
@@ -368,11 +375,7 @@
 							<div id="collapse4_3" class="panel-collapse noScroll collapse" role="tabpanel" aria-labelledby="headingOne" data-parent="#accordion" data-bs-parent="#bootstrap-accordion_3">
 								<div class="panel-body">
 									<p class="mbr-fonts-style panel-text display-7">
-										Lorem ipsum dolor sit amet, consectetur adipiscing elit. Fusce vestibulum
-										laoreet tincidunt. Proin et sapien scelerisque, ornare lectus eget, iaculis
-										lectus. Pellentesque viverra molestie tortor. Nunc sed interdum est, in maximus
-										diam. Donec eu tellus dictum, gravida velit et, sagittis arcu. Proin et lectus
-										dapibus. Cras fringilla elit velit placerat tortor mollis cursus.
+										Risk Score: <span id="landslide-risk-score"></span>
 									</p>
 								</div>
 							</div>
