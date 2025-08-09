@@ -155,11 +155,7 @@
 			? data2.generalweightedrisk
 			: Number(data2.generalweightedrisk);
 		  if (isNaN(fireScore)) fireScore = null;
-			
-	      let landslideScore = typeof data1.landslideRisk === "number"
-			? data1.landslideRisk
-			: Number(data1.landslideRisk);
-		  if (isNaN(landslideScore)) landslideScore = null;
+
 
 		  const riskLevel = getRiskLevel(fireScore);
 		  document.getElementById('wildfire-risk-level').textContent = riskLevel;
