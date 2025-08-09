@@ -207,7 +207,7 @@ def risk_summary():
         lat, lon = coords
         aqi = get_air_quality(lat, lon)
         flood_risk = get_flood_risk(lat, lon)
-        landslide_risk = get_lhasaRisk(lat, lon)
+        landslide_risk = get_lhasaRisk(lat, lon, 0.01)
         earthquake_risk = get_earthquake_risk(lat, lon)
         return jsonify({
             "wildfireRisk": "Mock",
