@@ -155,17 +155,10 @@
 			? data2.generalweightedrisk
 			: Number(data2.generalweightedrisk);
 		  if (isNaN(fireScore)) fireScore = null;
-			
-		  let landslideScore = typeof data2.generalweightedrisk === "number"
-			? data1.landslideRisk
-			: Number(data1.landsliderisk);
-		  if (isNaN(landslideScore)) landslideScore = null;
 
 		  const riskLevel = getRiskLevel(fireScore);
-		  const landslide_risk_level = getRiskLevel(landslideScore);
 			
 		  document.getElementById('wildfire-risk-level').textContent = riskLevel;
-		  document.getElementById('landslide-risk-level').textContent = landslide_risk_Level;
 		  
 		  const details = fireNittyGrittyAnalysis(data2) +
 			  `<p style="margin-top:12px;"><strong>What this means:</strong> ${getRiskExplanation(riskLevel)}</p>`;
@@ -173,8 +166,7 @@
 
 		  document.getElementById('wildfire-risk-score').textContent =
 			(fireScore !== null ? fireScore.toFixed(2) : 'N/A');
-		  document.getElementbyId('landslide-risk-score').textcontent = 
-			(landslideScore !== null ? landslideScore.toFixed(2): 'N/A'); 
+
 		  document.getElementById('wildfire-score-context').innerHTML =
 			  `<small>Your score is computed on a normalized scale from 0 (lowest fire risk) to 1 (highest fire risk). "${riskLevel}" means a score ${
 				riskLevel === "Low" ? "under 0.33" : riskLevel === "Medium" ? "between 0.33 and 0.66" : "over 0.66"
