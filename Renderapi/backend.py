@@ -154,11 +154,6 @@ def get_pgauh(lat, lon):
 #Getting Lhasa Risk
 def get_lhasaRisk(lat, lon, delta):
     lhasa_file = r"C:\CGA19\Renderapi\today.tif"
-    
-    if os.path.exists(lhasa_file):
-        print("File exists and ready to use!")
-    else:
-        print("File not found or not downloaded correctly.")
 
     min_lon = lon - delta
     max_lon = lon + delta
