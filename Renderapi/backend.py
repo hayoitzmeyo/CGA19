@@ -153,7 +153,7 @@ def get_pgauh(lat, lon):
 
 #Getting Lhasa Risk
 def get_lhasaRisk(lat, lon, delta):
-    lhasa_file = r"C:\CGA19\Renderapi\today.tif"
+    lhasa_file = r"Renderapi/today.tif"
 
     min_lon = lon - delta
     max_lon = lon + delta
