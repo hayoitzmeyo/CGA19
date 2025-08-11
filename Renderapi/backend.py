@@ -54,7 +54,7 @@ def get_faultDis(lat, lon):
         "where": "1=1",
         "outFields": "*",
         "f": "geojson", 
-        "resultRecordCount": 500
+        "resultRecordCount": 2000
     }
     response = requests.get(url, params=params)
     response.raise_for_status()  # raise error if request fails
