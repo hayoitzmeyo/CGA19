@@ -53,7 +53,8 @@ def get_faultDis(lat, lon):
     params = {
         "where": "1=1",
         "outFields": "*",
-        "f": "geojson"
+        "f": "geojson", 
+        "resultRecordCount": 1000
     }
     response = requests.get(url, params=params)
     response.raise_for_status()  # raise error if request fails
