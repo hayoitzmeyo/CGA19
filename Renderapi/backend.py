@@ -61,11 +61,11 @@ def get_faultDis(lat, lon):
     d = {'geometry': [Point(lon, lat)]}
     pt = gpd.GeoDataFrame(d, crs="EPSG:4326").to_crs(epsg=3310)
     min_dist = faults.geometry.distance(pt.geometry.iloc[0]).min()
+    print(min_dist) 
     return round(min_dist, 2)
 
 #Analyzing PGA Data
 def get_siteClass(lat, lon):
-
     url = "https://earthquake.usgs.gov/ws/designmaps/metadata.json"
     params = {
         "referenceDocument": "ASCE7-16",
@@ -73,9 +73,6 @@ def get_siteClass(lat, lon):
         "longitude": lon
     }
     response = requests.get(url, params=params)
-
-
-
     data = response.json()
     vs30 = data["response"]["data"]["vs30"]
 
