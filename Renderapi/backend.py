@@ -88,7 +88,7 @@ def get_faultDis(lat, lon):
 
         # Find min distance
         min_dist = faults.geometry.distance(pt.geometry.iloc[0]).min()
-        return round(1 / min_dist, 5) if min_dist is not None else 0
+        return 1 / round(min_dist, 2) if min_dist is not None else 0
 
     except Exception:
         return 0
