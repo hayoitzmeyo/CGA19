@@ -49,21 +49,49 @@ from rasterio.windows import from_bounds
 #Analyzing min_distance to a fault
 
 def get_faultDis(lat, lon):
-    url = "https://earthquake.usgs.gov/arcgis/rest/services/haz/NSHM_Fault_Sources/MapServer/0/query"
-    params = {
-        "where": "1=1",
-        "outFields": "*",
-        "f": "geojson", 
-        "resultRecordCount": 1000
-    }
-    response = requests.get(url, params=params)
-    response.raise_for_status()  # raise error if request fails
-    faults = gpd.read_file(response.url).to_crs(epsg=3310) #returns geojson file
-    d = {'geometry': [Point(lon, lat)]}
-    pt = gpd.GeoDataFrame(d, crs="EPSG:4326").to_crs(epsg=3310)
-    min_dist = faults.geometry.distance(pt.geometry.iloc[0]).min()
-    print(min_dist) 
-    return round(min_dist, 2)
+    try:
+        # Convert lat/lon (EPSG:4326) to Web Mercator (EPSG:3857)
+        proj_to_3857 = pyproj.Transformer.from_crs("EPSG:4326", "EPSG:3857", always_xy=True)
+        x, y = proj_to_3857.transform(lon, lat)
+
+        # 500 km in meters
+        buffer_m = 500_000
+
+        # Build extent
+        extent = {
+            "type": "extent",
+            "xmin": x - buffer_m,
+            "ymin": y - buffer_m,
+            "xmax": x + buffer_m,
+            "ymax": y + buffer_m,
+            "spatialReference": {"wkid": 102100, "latestWkid": 3857}
+        }
+
+        # Query USGS faults with bounding box
+        url = "https://earthquake.usgs.gov/arcgis/rest/services/haz/NSHM_Fault_Sources/MapServer/0/query"
+        params = {
+            "geometry": extent,
+            "geometryType": "esriGeometryEnvelope",
+            "spatialRel": "esriSpatialRelIntersects",
+            "where": "1=1",
+            "outFields": "*",
+            "f": "geojson",
+            "resultRecordCount": 500
+        }
+
+        response = requests.get(url, params=params, timeout=10)
+        response.raise_for_status()
+
+        # Load into GeoDataFrame & reproject
+        faults = gpd.read_file(response.url).to_crs(epsg=3310)
+        pt = gpd.GeoDataFrame({"geometry": [Point(lon, lat)]}, crs="EPSG:4326").to_crs(epsg=3310)
+
+        # Find min distance
+        min_dist = faults.geometry.distance(pt.geometry.iloc[0]).min()
+        return 1 / round(min_dist, 2) if min_dist is not None else 0
+
+    except Exception:
+        return 0
 
 #Analyzing PGA Data
 def get_siteClass(lat, lon):
@@ -187,7 +215,7 @@ def square_root_transform(x, y, z):
 #use standardization based on the historical data maybe
 #Final Functions
 def get_earthquake_risk(lat, lon):
-    faultDis = 1 / get_faultDis(lat, lon)#normalize this data
+    faultDis = get_faultDis(lat, lon)#normalize this data
     #get_faultDis(lat, lon)
     pgauh = get_pgauh(lat, lon)
     lhasaRisk = get_lhasaRisk(lat, lon, 0.01) #already normalized between 0 and 1
