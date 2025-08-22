@@ -3,6 +3,7 @@ import requests
 
 bp = Blueprint("backend", __name__)
 
+
 def get_coordinates(address):
     url = f"https://nominatim.openstreetmap.org/search?q={address}&format=json&limit=1"
     response = requests.get(url, headers={"User-Agent": "risk-app"})
