@@ -15,7 +15,7 @@ def get_coordinates(address):
     data = response.json()
     if not data:
         return None
-    return float(data[0]['lat']), float(data['lon'])
+    return float(data[0]['lat']), float(data[0]['lon'])
 
 
 def get_air_quality(lat, lon):
