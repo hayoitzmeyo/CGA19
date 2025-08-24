@@ -233,21 +233,34 @@ def risk_summary():
         aqi = get_air_quality(lat, lon)
         flood_risk = get_flood_risk(lat, lon)
         landslide_risk = get_lhasaRisk(lat, lon, 0.01)
+
+        # Earthquake risk calculation parameters
+        fault_dis = get_faultDis(lat, lon)
+        pgauh = get_pgauh(lat, lon)
+        site_class = get_siteClass(lat, lon)
+        risk_category = get_riskCategory(lat, lon)
         earthquake_risk = get_earthquake_risk(lat, lon)
+
         return jsonify({
             "wildfireRisk": "Mock",
             "floodRisk": flood_risk,
             "crimeRate": "Mock",
             "airQualityIndex": aqi,
-            "landslideRisk": landslide_risk, 
+            "landslideRisk": landslide_risk,
             "earthquakeRisk": earthquake_risk,
-            "recommendations": [
-                "Install smoke detectors",
-                "Consider flood insurance",
-                "Install a security system",
-                "Use air purifiers"
-            ]
+            # Add earthquake calculation parameters
+            "earthquakeParameters": {
+                "faultDistanceNormalized": fault_dis,
+                "pgauh": pgauh,
+                "lhasaRisk": landslide_risk,
+                "siteClass": site_class,
+                "riskCategory": risk_category
+            }
         })
+    except Exception as e:
+        print("Error in /risk-summary:", e)
+        return jsonify({"error": str(e)}), 500
+
     except Exception as e:
         print("Error in /risk-summary:", e)
         return jsonify({"error": str(e)}), 500

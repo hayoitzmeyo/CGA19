@@ -33,7 +33,8 @@
       z-index: 1;
     }
   </style>
-</head>
+<!-- START: Earthquake (and others) risk display JavaScript -->
+  
 <body>
 <style>
 .navbar-fixed-top {
@@ -74,8 +75,9 @@
 </head>
 <script>
 	window.addEventListener('DOMContentLoaded', function () {
-
+	
 	  const data1 = JSON.parse(localStorage.getItem('georisk_results_data1') || 'null');
+	  if (!data1) return;
 	  const data2 = JSON.parse(localStorage.getItem('georisk_results_data2') || 'null');
 	  const address = localStorage.getItem('georisk_address') || '';
 	
@@ -92,6 +94,7 @@
 		  <strong>Results for</strong> <i>${address}</i>
 		</h4>
 		<ul style="max-width:600px;margin:0 auto;" class="mbr-fonts-style display-7">
+		<li><strong>Earthquake Risk:</strong> ${data1.earthquakeRisk ?? 'N/A'}</li>
 		  <li><strong>Burn Risk:</strong> ${data2.harprobability ?? 'N/A'}</li>
 		  <li><strong>Housing Unit Risk:</strong> ${data2.normhurisk ?? 'N/A'}</li>
 		  <li><strong>Suppression Index:</strong> ${data2.normsdi ?? 'N/A'}</li>
@@ -105,7 +108,7 @@
 	
 	  document.getElementById('wildfire-risk-value').textContent = data2.generalweightedrisk ?? data2.harprobability ?? 'N/A';
 	  document.getElementById('flood-risk-value').textContent = data1.floodRisk ?? 'N/A';
-	  document.getElementById('landslide-risk-value').textContent = data1.earthquakeRisk ?? 'N/A';
+	  document.getElementById('landslide-risk-value').textContent = data1.landslideRisk ?? 'N/A';
 	  document.getElementById('earthquake-risk-value').textContent =data1.earthquakeRisk ?? 'N/A'; 
 		Array.isArray(data1.earthquakeRisk)
 		  ? (data1.earthquakeRisk.join(', ') || 'N/A')
@@ -120,9 +123,11 @@
 		  recList.appendChild(el);
 		});
 	  }
-	});
+});
 	</script>
 	<script>
+		const data1 = JSON.parse(localStorage.getItem('georisk_results_data1') || 'null');
+
 		function getRiskLevel(score) {
 		  if (score == null || isNaN(score)) return "Unknown";
 		  if (score < 0.33) return "Low";
@@ -213,7 +218,6 @@
 		});
 		</script>
 		
-<body>
 </div>
   
   <section data-bs-version="5.1" class="menu menu2 cid-uNWBl5CWoR" once="menu" id="menu02-j">
@@ -384,24 +388,33 @@
 							</div>
 						</div>
 						<div class="card">
-							<div class="card-header" role="tab" id="headingOne">
-								<a role="button" class="panel-title collapsed" data-toggle="collapse" data-bs-toggle="collapse" data-core="" href="#collapse5_3" aria-expanded="false" aria-controls="collapse5">
-									<h6 class="panel-title-edit mbr-semibold mbr-fonts-style mb-0 display-5">Earthquake Risk Probability</h6>
-									<span class="sign mbr-iconfont mobi-mbri-arrow-down"></span>
-								</a>
+							<div class="card-header" role="tab" id="headingEarthquake">
+							  <a role="button" class="panel-title collapsed" data-toggle="collapse" data-bs-toggle="collapse" 
+								 href="#collapseEarthquake" aria-expanded="false" aria-controls="collapseEarthquake">
+								<h6 class="panel-title-edit mbr-semibold mbr-fonts-style mb-0 display-5">
+								  Earthquake Risk Probability 
+								  <span id="earthquake-risk-level" style="color:#c9302c;"></span>
+								</h6>
+								<span class="sign mbr-iconfont mobi-mbri-arrow-down"></span>
+							  </a>
 							</div>
-							<div id="collapse5_3" class="panel-collapse noScroll collapse" role="tabpanel" aria-labelledby="headingOne" data-parent="#accordion" data-bs-parent="#bootstrap-accordion_3">
-								<div class="panel-body">
-									<p class="mbr-fonts-style panel-text display-7">
-										Lorem ipsum dolor sit amet, consectetur adipiscing elit. Fusce vestibulum
-										laoreet tincidunt. Proin et sapien scelerisque, ornare lectus eget, iaculis
-										lectus. Pellentesque viverra molestie tortor. Nunc sed interdum est, in maximus
-										diam. Donec eu tellus dictum, gravida velit et, sagittis arcu. Proin et lectus
-										dapibus. Cras fringilla elit velit placerat tortor mollis cursus.
-									</p>
+							<div id="collapseEarthquake" class="panel-collapse noScroll collapse" role="tabpanel" 
+								 aria-labelledby="headingEarthquake" data-parent="#accordion" data-bs-parent="#bootstrap-accordion_3">
+							  <div class="panel-body">
+								<div class="mbr-fonts-style panel-text display-7" id="earthquake-risk-details"></div>
+									<div class="earthquake-score-details" style="margin-top: 12px;">
+ 									 <span class="price mbr-fonts-style display-7">
+   										 Risk Score: <span id="earthquake-risk-score"></span>
+								</span>
+								<ul id="earthquake-rec-list" class="mbr-fonts-style display-7"></ul>
+
+								<div id="earthquake-score-context" class="mbr-fonts-style display-7" style="margin-top:6px;"></div>
 								</div>
+
+							  </div>
 							</div>
-						</div>
+						  </div>
+						  
 						<div class="card">
 							<div class="card-header" role="tab" id="headingOne">
 								<a role="button" class="panel-title collapsed" data-toggle="collapse" data-bs-toggle="collapse" data-core="" href="#collapse6_3" aria-expanded="false" aria-controls="collapse6">
@@ -469,7 +482,7 @@
 						<p class="price mbr-fonts-style display-7">
 							Risk Level:</p>
 						<p class="card-text mbr-fonts-style display-7">
-							a.
+							<ul id="earthquake-rec-list" class="mbr-fonts-style display-7"></ul>
 						</p>
 						<div class="mbr-section-btn mt-auto"><a class="btn btn-lg btn-primary display-7" href="#">Learn More</a></div>
 					</div>
@@ -558,7 +571,100 @@ window.addEventListener('DOMContentLoaded', function () {
   <script src="../../Rn983nS94nF3j.com/js/navbar-dropdown.js"></script>
   <script src="../../Rn983nS94nF3j.com/js/mbr-switch-arrow.js"></script>
   <script src="../../Rn983nS94nF3j.com/js/script.js"></script>
+  <script>
+	// === Helper functions for earthquake risk display ===
+	function getEarthquakeRiskLevel(score) {
+	  if (score == null || isNaN(score)) return "Unknown";
+	  if (score < 0.33) return "Low";
+	  if (score < 0.66) return "Medium";
+	  return "High";
+	}
   
+	function getEarthquakeRiskExplanation(level) {
+  if (level === "Low")
+    return "Low earthquake risk: Seismic hazard is minor. Continue standard safety practices.";
+  if (level === "Medium")
+    return "Medium earthquake risk: Moderate seismic activity possible. Consider retrofitting and emergency preparedness.";
+  if (level === "High")
+    return "High earthquake risk: Significant seismic hazard. Strongly consider structural assessments, retrofitting, and comprehensive emergency planning.";
+  return "No explanation available.";
+}
+function personalizedEarthquakeRecommendations(data1) {
+  const recs = [];
+  const eq = data1.earthquakeParameters || {};
+  
+  if (eq.pgauh && Math.max(...(Array.isArray(eq.pgauh) ? eq.pgauh : [eq.pgauh])) > 0.3) {
+    recs.push("Peak Ground Acceleration is elevated: Consider foundation retrofitting and securing heavy objects.");
+  }
+  if (eq.riskCategory && (eq.riskCategory === "High" || eq.riskCategory === 3)) {
+    recs.push("Building risk category is high: Recommended to perform a structural engineering evaluation.");
+  }
+  if (eq.landslideRisk && eq.landslideRisk > 0.5) {
+    recs.push("Landslide risk is significant: Consult geological specialists for slope stabilization.");
+  }
+  if (recs.length === 0) {
+    recs.push("Maintain a basic earthquake preparedness plan, secure heavy furniture, and review evacuation routes.");
+  }
+  return recs;
+}
+
+  
+	function earthquakeNittyGrittyAnalysis(data1) {
+  let html = `<p><strong>Model Details:</strong></p><ul>`;
+  if ('earthquakeParameters' in data1) {
+    const eq = data1.earthquakeParameters;
+    if (eq.faultDistanceNormalized !== undefined)
+      html += `<li><b>Fault Distance (Normalized):</b> ${eq.faultDistanceNormalized}</li>`;
+    if (eq.pgauh !== undefined)
+      html += `<li><b>Peak Ground Acceleration (PGA):</b> ${Array.isArray(eq.pgauh) ? eq.pgauh.join(', ') : eq.pgauh}</li>`;
+    if (eq.siteClass !== undefined)
+      html += `<li><b>Site Class:</b> ${eq.siteClass}</li>`;
+    if (eq.riskCategory !== undefined)
+      html += `<li><b>Building Risk Category:</b> ${eq.riskCategory}</li>`;
+    if (eq.landslideRisk !== undefined)
+      html += `<li><b>Landslide Risk:</b> ${eq.landslideRisk}</li>`;
+    if (eq.seismicZone !== undefined)
+      html += `<li><b>Seismic Zone:</b> ${eq.seismicZone}</li>`;
+  } else {
+    html += "<li>No earthquake parameter details available.</li>";
+  }
+  html += `</ul>
+    <p><em>These values influence your earthquake risk score.</em></p>`;
+  return html;
+}
+
+  
+	// === Your existing fire risk helper functions (keep them as they are) ===
+	// (Keep getRiskLevel, getRiskExplanation, fireNittyGrittyAnalysis, etc.)
+  
+	window.addEventListener('DOMContentLoaded', function () {
+  const data1 = JSON.parse(localStorage.getItem('georisk_results_data1') || 'null');
+  if (!data1) return;
+
+  let eqScore = typeof data1.earthquakeRisk === 'number' ? data1.earthquakeRisk : Number(data1.earthquakeRisk);
+  if (isNaN(eqScore)) eqScore = null;
+
+  const eqRiskLevel = getRiskLevel(eqScore); // reuse same risk level function or define similar for earthquake
+
+  document.getElementById('earthquake-risk-level').textContent = eqRiskLevel;
+  document.getElementById('earthquake-risk-level').style.color = (eqRiskLevel === "High" ? "#c9302c" : eqRiskLevel === "Medium" ? "#f0ad4e" : "#5cb85c");
+  document.getElementById('earthquake-risk-score').textContent = eqScore !== null ? eqScore.toFixed(2) : 'N/A';
+  document.getElementById('earthquake-score-context').innerHTML =
+    `<small>Your earthquake risk score is normalized from 0 (lowest) to 1 (highest). "${eqRiskLevel}" indicates ${
+      eqRiskLevel === 'Low' ? 'a score under 0.33' :
+      eqRiskLevel === 'Medium' ? 'between 0.33 and 0.66' :
+      'over 0.66'
+    }.</small>`;
+
+  document.getElementById('earthquake-risk-details').innerHTML =
+    earthquakeNittyGrittyAnalysis(data1) +
+    `<p style="margin-top:12px;"><strong>What this means:</strong> ${getEarthquakeRiskExplanation(eqRiskLevel)}</p>`;
+
+  const eqRecs = personalizedEarthquakeRecommendations(data1);
+  document.getElementById('earthquake-rec-list').innerHTML = eqRecs.map(r => `<li>${r}</li>`).join('');
+});
+  </script>
+  <!-- END: Earthquake risk display JavaScript -->
   
   
 

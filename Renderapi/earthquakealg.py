@@ -1,10 +1,11 @@
+'''
 import requests
 import geopandas as gpd
 import overpy
 from shapely.geometry import Point
 
 
-
+# DEPRECATED DO NOT USE 
 #The Final Probability should be a weighted average of the below
 
 #Analyzing min_distance to a fault
@@ -130,3 +131,4 @@ def get_earthquake_risk(lat, lon):
 
 
 
+'''
