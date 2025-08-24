@@ -1,5 +1,10 @@
 from flask import Blueprint, request, jsonify
 import requests
+import pyproj
+import geopandas as gpd
+import overpy
+from shapely.geometry import Point
+import numpy as np
 
 bp = Blueprint("backend", __name__)
 
@@ -10,13 +15,15 @@ def get_coordinates(address):
     data = response.json()
     if not data:
         return None
-    return float(data[0]['lat']), float(data[0]['lon'])
+    return float(data[0]['lat']), float(data['lon'])
+
 
 def get_air_quality(lat, lon):
     url = f"https://air-quality-api.open-meteo.com/v1/air-quality?latitude={lat}&longitude={lon}&hourly=us_aqi"
     res = requests.get(url)
     data = res.json()
-    return data['hourly']['us_aqi'][0] if 'hourly' in data else "Unknown"
+    return data.get('hourly', {}).get('us_aqi', [])[0] if 'hourly' in data else "Unknown"
+
 
 def get_flood_risk(lat, lon):
     url = "https://flood-api.open-meteo.com/v1/flood"
@@ -27,7 +34,7 @@ def get_flood_risk(lat, lon):
     }
     response = requests.get(url, params=params)
     data = response.json()
-    river_discharge = data['daily']['river_discharge'][0]
+    river_discharge = data.get('daily', {}).get('river_discharge', [0])
     if river_discharge > 200:
         risk = "High"
     elif river_discharge > 100:
@@ -36,30 +43,14 @@ def get_flood_risk(lat, lon):
         risk = "Low"
     return risk
 
-import requests
-import geopandas as gpd
-import overpy
-from shapely.geometry import Point
-import rasterio
-
-import numpy as np
-from rasterio.windows import from_bounds
-
-
-#The Final Probability should be a weighted average of the below
-
-#Analyzing min_distance to a fault
 
 def get_faultDis(lat, lon):
     try:
-        # Convert lat/lon (EPSG:4326) to Web Mercator (EPSG:3857)
         proj_to_3857 = pyproj.Transformer.from_crs("EPSG:4326", "EPSG:3857", always_xy=True)
         x, y = proj_to_3857.transform(lon, lat)
 
-        # 500 km in meters
         buffer_m = 500_000
 
-        # Build extent
         extent = {
             "type": "extent",
             "xmin": x - buffer_m,
@@ -69,7 +60,6 @@ def get_faultDis(lat, lon):
             "spatialReference": {"wkid": 102100, "latestWkid": 3857}
         }
 
-        # Query USGS faults with bounding box
         url = "https://earthquake.usgs.gov/arcgis/rest/services/haz/NSHM_Fault_Sources/MapServer/0/query"
         params = {
             "geometry": extent,
@@ -84,18 +74,19 @@ def get_faultDis(lat, lon):
         response = requests.get(url, params=params, timeout=10)
         response.raise_for_status()
 
-        # Load into GeoDataFrame & reproject
         faults = gpd.read_file(response.url).to_crs(epsg=3310)
         pt = gpd.GeoDataFrame({"geometry": [Point(lon, lat)]}, crs="EPSG:4326").to_crs(epsg=3310)
 
-        # Find min distance
         min_dist = faults.geometry.distance(pt.geometry.iloc[0]).min()
-        return 1 / round(min_dist, 2) if min_dist is not None else 0
+        if min_dist is not None and min_dist > 0:
+            return 1 / round(min_dist, 2)
+        else:
+            return 0
 
     except Exception:
         return 0
 
-#Analyzing PGA Data
+
 def get_siteClass(lat, lon):
     url = "https://earthquake.usgs.gov/ws/designmaps/metadata.json"
     params = {
@@ -105,7 +96,7 @@ def get_siteClass(lat, lon):
     }
     response = requests.get(url, params=params)
     data = response.json()
-    vs30 = data["response"]["data"]["vs30"]
+    vs30 = data["response"]["data"].get("vs30", 0)
 
     if vs30 > 1500:
         return "A"
@@ -120,15 +111,14 @@ def get_siteClass(lat, lon):
     else:
         return "F"
 
-#Getting Risk_Category_Data using OSM Data from the python overpy module
+
 def get_buildingType(lat, lon, length):
     api = overpy.Overpass()
     s = lat - length
     n = lat + length
     w = lon - length
     e = lon + length
-#    print(s, n, w, e)
-    api = overpy.Overpass()
+
     query = f"""
     [out:json];
     way["building"]({s},{w},{n},{e});
@@ -136,7 +126,9 @@ def get_buildingType(lat, lon, length):
     """
     result = api.query(query)
     for way in result.ways:
-        return(way.tags.get("building", "n/a"))
+        return way.tags.get("building", "n/a")
+    return None
+
 
 def get_riskCategory(lat, lon):
     buildingType = get_buildingType(lat, lon, 0.000085)
@@ -161,7 +153,6 @@ def get_riskCategory(lat, lon):
     else:
         return "I"   # Default to lowest if unknown
 
-#print(get_riskCategory(37.239887174704414, -121.89716243138542))
 
 def get_pgauh(lat, lon):
     siteClass = get_siteClass(lat, lon)
@@ -174,12 +165,11 @@ def get_pgauh(lat, lon):
         "riskCategory": riskCategory,
         "title": "ASCE7-22"
     }
-    response = requests.get(url, params = params)
+    response = requests.get(url, params=params)
     data = response.json()
     hazard_list = data["response"]["data"]["underlyingData"]["pgauh"]
     return hazard_list
 
-#Getting Lhasa Risk
 
 def get_lhasaRisk(lat, lon, pad):
     lhasa_url = "https://maps.nccs.nasa.gov/mapping/rest/services/landslide_viewer/Landslide_Susceptibility_Update_2023/MapServer"
@@ -187,10 +177,10 @@ def get_lhasaRisk(lat, lon, pad):
     url = lhasa_url + "/identify"
     params = {
         "f": "json",
-        "geometry": f"{lon},{lat}",       # ArcGIS: x=lon, y=lat
+        "geometry": f"{lon},{lat}",
         "geometryType": "esriGeometryPoint",
         "sr": 4326,
-        "layers": "all:0",                # target layer 0
+        "layers": "all:0",
         "tolerance": 1,
         "mapExtent": f"{lon-pad},{lat-pad},{lon+pad},{lat+pad}",
         "imageDisplay": "400,400,96",
@@ -200,27 +190,25 @@ def get_lhasaRisk(lat, lon, pad):
     r.raise_for_status()
     data = r.json()
     if not data.get("results"):
-        print("got None")
         return None
 
     value = data["results"][0]["attributes"]["Raster.Value"]
     return int(value) / 5
 
-#normalization (min-max scaling) function
+
 def square_root_transform(x, y, z):
     vars = np.array([x, y, z])
-    print(np.sqrt(vars))
-    avg = sum(np.sqrt(vars))/3
+    root_vars = np.sqrt(vars)
+    avg = np.mean(root_vars)
     return avg
 
-#use standardization based on the historical data maybe
-#Final Functions
+
 def get_earthquake_risk(lat, lon):
-    faultDis = get_faultDis(lat, lon)#normalize this data
-    #get_faultDis(lat, lon)
+    faultDis = get_faultDis(lat, lon)
     pgauh = get_pgauh(lat, lon)
-    lhasaRisk = get_lhasaRisk(lat, lon, 0.01) #already normalized between 0 and 1
-    return square_root_transform(faultDis, pgauh, lhasaRisk)
+    lhasaRisk = get_lhasaRisk(lat, lon, 0.01) or 0  # normalized between 0 and 1, default to 0 if None
+    return square_root_transform(faultDis, np.mean(pgauh) if isinstance(pgauh, list) else pgauh, lhasaRisk)
+
 
 @bp.route('/risk-summary', methods=['POST'])
 def risk_summary():
@@ -231,9 +219,14 @@ def risk_summary():
         if not coords:
             return jsonify({"error": "Address not found"}), 400
         lat, lon = coords
+
+        fault_dis = get_faultDis(lat, lon)
+        pgauh = get_pgauh(lat, lon)
+        site_class = get_siteClass(lat, lon)
+        risk_category = get_riskCategory(lat, lon)
+        landslide_risk = get_lhasaRisk(lat, lon, 0.01) or 0
         aqi = get_air_quality(lat, lon)
         flood_risk = get_flood_risk(lat, lon)
-        landslide_risk = get_lhasaRisk(lat, lon, 0.01)
         earthquake_risk = get_earthquake_risk(lat, lon)
 
         return jsonify({
@@ -243,7 +236,6 @@ def risk_summary():
             "airQualityIndex": aqi,
             "landslideRisk": landslide_risk,
             "earthquakeRisk": earthquake_risk,
-            # Add earthquake calculation parameters
             "earthquakeParameters": {
                 "faultDistanceNormalized": fault_dis,
                 "pgauh": pgauh,
@@ -252,9 +244,6 @@ def risk_summary():
                 "riskCategory": risk_category
             }
         })
-    except Exception as e:
-        print("Error in /risk-summary:", e)
-        return jsonify({"error": str(e)}), 500
 
     except Exception as e:
         print("Error in /risk-summary:", e)
