@@ -2,6 +2,8 @@ from flask import Blueprint, request, jsonify
 import requests
 
 bp = Blueprint("backend", __name__)
+
+
 def get_coordinates(address):
     url = f"https://nominatim.openstreetmap.org/search?q={address}&format=json&limit=1"
     response = requests.get(url, headers={"User-Agent": "risk-app"})
@@ -178,32 +180,31 @@ def get_pgauh(lat, lon):
     return hazard_list
 
 #Getting Lhasa Risk
-def get_lhasaRisk(lat, lon, delta):
-    lhasa_file = r"Renderapi/today.tif"
 
-    min_lon = lon - delta
-    max_lon = lon + delta
-    min_lat = lat - delta
-    max_lat = lat + delta
+def get_lhasaRisk(lat, lon, pad):
+    lhasa_url = "https://maps.nccs.nasa.gov/mapping/rest/services/landslide_viewer/Landslide_Susceptibility_Update_2023/MapServer"
 
-    with rasterio.open(lhasa_file) as src:
-        #col, row = src.index(lon, lat)
-        raster_bounds = src.bounds
-        clipped_min_lon = max(min_lon, raster_bounds.left + 1e-10)
-        clipped_max_lon = min(max_lon, raster_bounds.right - 1e-10)
-        clipped_min_lat = max(min_lat, raster_bounds.bottom + 1e-10)
-        clipped_max_lat = min(max_lat, raster_bounds.top - 1e-10)
+    url = lhasa_url + "/identify"
+    params = {
+        "f": "json",
+        "geometry": f"{lon},{lat}",       # ArcGIS: x=lon, y=lat
+        "geometryType": "esriGeometryPoint",
+        "sr": 4326,
+        "layers": "all:0",                # target layer 0
+        "tolerance": 1,
+        "mapExtent": f"{lon-pad},{lat-pad},{lon+pad},{lat+pad}",
+        "imageDisplay": "400,400,96",
+        "returnGeometry": "false",
+    }
+    r = requests.get(url, params=params)
+    r.raise_for_status()
+    data = r.json()
+    if not data.get("results"):
+        print("got None")
+        return None
 
-        window = from_bounds(clipped_min_lon, clipped_min_lat, clipped_max_lon, clipped_max_lat, src.transform)
-        cropped_data = src.read(1, window=window) #Returned the cropped rasterio window
-        if cropped_data.size == 0:
-            return 0
-        clean_data = cropped_data[~np.isnan(cropped_data)]
-        max_value = clean_data.max()
-        print(max_value)
-        # Handle NaN or NoData
-
-        return float(max_value)
+    value = data["results"][0]["attributes"]["Raster.Value"]
+    return int(value) / 5
 
 #normalization (min-max scaling) function
 def square_root_transform(x, y, z):
@@ -233,12 +234,6 @@ def risk_summary():
         aqi = get_air_quality(lat, lon)
         flood_risk = get_flood_risk(lat, lon)
         landslide_risk = get_lhasaRisk(lat, lon, 0.01)
-
-        # Earthquake risk calculation parameters
-        fault_dis = get_faultDis(lat, lon)
-        pgauh = get_pgauh(lat, lon)
-        site_class = get_siteClass(lat, lon)
-        risk_category = get_riskCategory(lat, lon)
         earthquake_risk = get_earthquake_risk(lat, lon)
 
         return jsonify({
