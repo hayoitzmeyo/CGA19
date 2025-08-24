@@ -24,7 +24,7 @@ def get_air_quality(lat, lon):
     data = res.json()
     return data.get('hourly', {}).get('us_aqi', [])[0] if 'hourly' in data else "Unknown"
 
-
+'''
 def get_flood_risk(lat, lon):
     url = "https://flood-api.open-meteo.com/v1/flood"
     params = {
@@ -42,7 +42,7 @@ def get_flood_risk(lat, lon):
     else:
         risk = "Low"
     return risk
-
+'''
 
 def get_faultDis(lat, lon):
     try:
@@ -226,12 +226,12 @@ def risk_summary():
         risk_category = get_riskCategory(lat, lon)
         landslide_risk = get_lhasaRisk(lat, lon, 0.01) or 0
         aqi = get_air_quality(lat, lon)
-        flood_risk = get_flood_risk(lat, lon)
+        #flood_risk = get_flood_risk(lat, lon)
         earthquake_risk = get_earthquake_risk(lat, lon)
 
         return jsonify({
             "wildfireRisk": "Mock",
-            "floodRisk": flood_risk,
+            #"floodRisk": flood_risk,
             "crimeRate": "Mock",
             "airQualityIndex": aqi,
             "landslideRisk": landslide_risk,
