@@ -1,0 +1,12 @@
+[build]
+  command = "bash ./netlify-build.sh"
+  publish = "."
+
+[build.environment]
+  PYTHON_VERSION = "3.10"
+  NODE_VERSION = "20"
+  PROJ_DIR = "/usr"
+
+# Install system packages before pip runs
+[build.lifecycle]
+  onPreBuild = "apt-get update && apt-get install -y libproj-dev proj-data proj-bin gdal-bin"
