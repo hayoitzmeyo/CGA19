@@ -2,7 +2,6 @@ from flask import Blueprint, request, jsonify
 import requests
 import pyproj
 import geopandas as gpd
-import overpy
 from shapely.geometry import Point
 import numpy as np
 import io
