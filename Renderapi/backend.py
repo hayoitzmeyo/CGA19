@@ -3,6 +3,7 @@ import requests
 import pyproj
 import geopandas as gpd
 from shapely.geometry import Point
+import overpy
 import numpy as np
 import io
 
@@ -259,7 +260,7 @@ def get_lhasaRisk(lat, lon, pad):
             return float(value) / 5.0  # Normalize to 0-1 scale
         return 0.0
     except Exception as e:
-        print(f"Error getting landslide risk: {e}")
+        print("Error getting landslide risk: {e}")
         return 0.0
 
 
