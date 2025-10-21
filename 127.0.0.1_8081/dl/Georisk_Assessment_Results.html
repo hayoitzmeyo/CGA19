@@ -228,7 +228,57 @@
 			  }
 			});
 			</script>
-			
+	<script>
+		function getRiskLevelFlood(level) {
+		  if (level === "Low")
+			return "Low flood risk: Historical and topographic models suggest limited inundation potential. Maintain good drainage and monitor local alerts during storms.";
+		  if (level === "Medium")
+			return "Medium flood risk: Nearby water bodies or drainage patterns may cause moderate flooding in heavy rain. Consider sandbags, sump pumps, and flood insurance.";
+		  if (level === "High")
+			return "High flood risk: Property lies within or near a mapped floodplain or low-lying area. Prepare flood barriers, elevate valuables, and have an evacuation plan.";
+		  return "No explanation available.";
+		}
+		
+		function floodNittyGrittyAnalysis(d1) {
+		  let html = `<p><strong>Model Details:</strong></p><ul>`;
+		  if ('floodRisk' in d1) html += `<li><b>Normalized Flood Risk Score:</b> ${d1.floodRisk}</li>`;
+		  if ('floodZone' in d1) html += `<li><b>FEMA Flood Zone:</b> ${d1.floodZone}</li>`;
+		  if ('rainfallIndex' in d1) html += `<li><b>Recent Rainfall Index:</b> ${d1.rainfallIndex}</li>`;
+		  if ('drainageScore' in d1) html += `<li><b>Drainage Efficiency Score:</b> ${d1.drainageScore}</li>`;
+		  html += `</ul>`;
+		  html += `<p><em>Flood risk is estimated from historical FEMA flood maps, rainfall indices, and terrain drainage capacity.</em></p>`;
+		  return html;
+		}
+		
+		window.addEventListener('DOMContentLoaded', function () {
+		  const d1 = JSON.parse(localStorage.getItem('georisk_results_data1') || 'null');
+		  if (!d1) return;
+		
+		  // Parse score
+		  let floodScore = (typeof d1.floodRisk === "number") ? d1.floodRisk : Number(d1.floodRisk);
+		  if (isNaN(floodScore)) floodScore = null;
+		
+		  const level = getRiskLevel(floodScore);
+		  const levelSpan = document.getElementById('flood-risk-level');
+		  if (levelSpan) levelSpan.textContent = level;
+		
+		  const details = floodNittyGrittyAnalysis(d1) +
+			`<p style="margin-top:12px;"><strong>What this means:</strong> ${getRiskLevelFlood(level)}</p>`;
+		  const detailsDiv = document.getElementById('flood-risk-details');
+		  if (detailsDiv) detailsDiv.innerHTML = details;
+		
+		  const scoreEl = document.getElementById('flood-risk-score');
+		  if (scoreEl) scoreEl.textContent = (floodScore !== null ? floodScore.toFixed(2) : 'N/A');
+		
+		  const contextEl = document.getElementById('flood-score-context');
+		  if (contextEl) {
+			contextEl.innerHTML = `<small>Your score is on a 0–1 scale. "${level}" means a score ${
+			  level === "Low" ? "under 0.33" : level === "Medium" ? "between 0.33 and 0.66" : "over 0.66"
+			}.</small>`;
+		  }
+		});
+		</script>
+		
 	<script>
 		function personalizedFireRecommendations(data2) {
 		  const recs = [];
@@ -295,6 +345,41 @@
 			  list.innerHTML = recs.map(r => `<li>${r}</li>`).join("");
 			});
 			</script>
+		<script>
+			function personalizedFloodRecommendations(d1) {
+			  const recs = [];
+			  const score = Number(d1.floodRisk) || 0;
+			  const zone = (d1.floodZone || "").toUpperCase();
+			
+			  if (score > 0.66 || ["A", "AE", "AH", "AO", "VE", "V"].includes(zone)) {
+				recs.push("High flood exposure: Elevate major utilities above expected water levels, install flood vents, and purchase flood insurance if available.");
+			  } else if (score > 0.33) {
+				recs.push("Medium flood risk: Inspect your property’s drainage, keep gutters clear, and consider installing check valves to prevent backflow.");
+			  } else {
+				recs.push("Low flood risk: Continue regular maintenance, stay alert during heavy storms, and know your evacuation route.");
+			  }
+			
+			  if ((Number(d1.drainageScore) || 0) < 0.4) {
+				recs.push("Drainage efficiency is low: Regrade or add French drains to divert runoff away from structures.");
+			  }
+			
+			  if ((Number(d1.rainfallIndex) || 0) > 0.7) {
+				recs.push("Rainfall trends indicate increased extreme events: Verify flood insurance coverage and prepare emergency go-bags.");
+			  }
+			
+			  return recs.length ? recs : ["No additional recommendations found for your flood risk profile."];
+			}
+			
+			window.addEventListener('DOMContentLoaded', function () {
+			  const d1 = JSON.parse(localStorage.getItem('georisk_results_data1') || 'null');
+			  if (!d1) return;
+			  const list = document.getElementById('flood-rec-list');
+			  if (!list) return;
+			  const recs = personalizedFloodRecommendations(d1);
+			  list.innerHTML = recs.map(r => `<li>${r}</li>`).join("");
+			});
+			</script>
+			
 			
 		
 <body>
@@ -407,25 +492,30 @@
 							</div>
 						</div>
 						<div class="card">
-							<div class="card-header" role="tab" id="headingOne">
-								<a role="button" class="panel-title collapsed" data-toggle="collapse" data-bs-toggle="collapse" data-core="" href="#collapse2_3" aria-expanded="false" aria-controls="collapse2">
-									<h6 class="panel-title-edit mbr-semibold mbr-fonts-style mb-0 display-5">
-										Flood Risk Probability</h6>
-									<span class="sign mbr-iconfont mobi-mbri-arrow-down"></span>
-								</a>
+							<div class="card-header" role="tab" id="headingFlood">
+							  <a role="button" class="panel-title collapsed" data-toggle="collapse" data-bs-toggle="collapse" href="#collapseFlood" aria-expanded="false" aria-controls="collapseFlood">
+								<h6 class="panel-title-edit mbr-semibold mbr-fonts-style mb-0 display-5">
+								  Flood Risk Probability:
+								  <span id="flood-risk-level" style="color:#007bff;"></span>
+								</h6>
+								<span class="sign mbr-iconfont mobi-mbri-arrow-down"></span>
+							  </a>
 							</div>
-							<div id="collapse2_3" class="panel-collapse noScroll collapse" role="tabpanel" aria-labelledby="headingOne" data-parent="#accordion" data-bs-parent="#bootstrap-accordion_3">
-								<div class="panel-body">
-									<p class="mbr-fonts-style panel-text display-7">
-										Lorem ipsum dolor sit amet, consectetur adipiscing elit. Fusce vestibulum
-										laoreet tincidunt. Proin et sapien scelerisque, ornare lectus eget, iaculis
-										lectus. Pellentesque viverra molestie tortor. Nunc sed interdum est, in maximus
-										diam. Donec eu tellus dictum, gravida velit et, sagittis arcu. Proin et lectus
-										dapibus. Cras fringilla elit velit placerat tortor mollis cursus.
-									</p>
+							<div id="collapseFlood" class="panel-collapse noScroll collapse" role="tabpanel" aria-labelledby="headingFlood" data-parent="#accordion" data-bs-parent="#bootstrap-accordion_3">
+							  <div class="panel-body">
+								<div class="mbr-fonts-style panel-text display-7" id="flood-risk-details">Loading flood analysis...</div>
+								<div style="margin-top: 12px;">
+								  <span class="price mbr-fonts-style display-7">
+									Risk Score: <span id="flood-risk-score"></span>
+								  </span>
+								  <div id="flood-score-context" class="mbr-fonts-style display-7" style="margin-top:6px;"></div>
 								</div>
+								<h6 style="margin-top:16px;"><b>Recommendations:</b></h6>
+								<ul id="flood-rec-list" class="mbr-fonts-style display-7"></ul>
+							  </div>
 							</div>
-						</div>
+						  </div>
+						  
 						<div class="card">
 							<div class="card-header" role="tab" id="headingWildfire">
 							  <a role="button" class="panel-title" data-toggle="collapse" data-bs-toggle="collapse" href="#collapseWildfire" aria-expanded="true" aria-controls="collapseWildfire">

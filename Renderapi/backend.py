@@ -25,6 +25,82 @@ def get_coordinates(address):
         return None
 
 
+def get_elevation(lat, lon):
+    url = "https://api.open-elevation.com/api/v1/lookup"
+    payload = {
+        "locations": [{"latitude": lat, "longitude": lon}]
+    }
+    try:
+        response = requests.post(url, json=payload, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        # Return elevation in meters
+        if "results" in data and len(data["results"]) > 0:
+            return data["results"][0].get("elevation")
+        return None
+    except Exception as e:
+        print(f"Elevation fetch error: {e}")
+        return None
+
+def get_noaa_precip(lat, lon, startdate, enddate):
+    url = "https://www.ncei.noaa.gov/cdo-web/api/v2/data"
+    headers = {"token": "mZrOfwskAmScPKKmsBhejnjbSBVYunzO"}
+    params = {
+        "datasetid": "GHCND",
+        "datatypeid": "PRCP",
+        "startdate": startdate,
+        "enddate": enddate,
+        "limit": 1,
+        "units": "metric",
+        "latitude": lat,
+        "longitude": lon
+    }
+    try:
+        response = requests.get(url, headers=headers, params=params, timeout=12)
+        response.raise_for_status()
+        data = response.json()
+        if "results" in data and len(data["results"]) > 0:
+            return data["results"][0].get("value")
+        return None
+    except Exception as e:
+        print(f"NOAA fetch error: {e}")
+        return None
+
+
+def get_fema_flood_data(lat, lon):
+    url = "https://api.nationalflooddata.com/v3/data"
+    headers = {"X-Api-Key": "ESKxETVHZm4pZXY6WH9UjkUhtDnAVT73TJXblPg8"}
+    params = {"latitude": lat, "longitude": lon}
+    try:
+        response = requests.get(url, headers=headers, params=params, timeout=12)
+        response.raise_for_status()
+        data = response.json()
+        # Parse whatever flood zone or risk attribute is available
+        flood_zone = data.get("flood_zone")
+        flood_risk = data.get("flood_risk")
+        return {"zone": flood_zone, "risk": flood_risk}
+
+    except Exception as e:
+        print(f"FEMA flood API error: {e}")
+        return None
+def get_closest_waterbody(lat, lon):
+    url = "https://api.wateratlas.usf.edu/waterbodies/closest"
+    params = {"latitude": lat, "longitude": lon}
+    try:
+        response = requests.get(url, params=params, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        # Example for returning main attributes
+        return {
+            "name": data.get("name"),
+            "distance_km": data.get("distance_km") or data.get("distance_miles", 0) * 1.60934
+        }
+
+    except Exception as e:
+        print(f"Water Atlas API error: {e}")
+        return None
+
+
 def get_air_quality(lat, lon):
     """Get air quality index from Open-Meteo API"""
     try:
@@ -323,7 +399,36 @@ def risk_summary():
         landslide_risk = get_lhasaRisk(lat, lon, 0.01) or 0
         aqi = get_air_quality(lat, lon)
         earthquake_risk = get_earthquake_risk(lat, lon)
+        elevation = get_elevation(lat, lon)
+        noaa_precip = get_noaa_precip(lat, lon, "2010-01-01", "2025-9-11")  
+        fema_data = get_fema_flood_data(lat, lon)
+        waterbody = get_closest_waterbody(lat, lon)
+        def clamp(v, lo=0, hi=1):
+            try:
+                return max(lo, min(hi, float(v)))
+            except:
+                return 0.0
 
+        norm_elevation = clamp(1 - (float(elevation or 0) / 500.0))
+        norm_precip = clamp((float(noaa_precip or 0) / 2000.0))
+        fema_zone = (fema_data or {}).get("zone") if fema_data else None
+        zone_weights = {
+            "V": 1.0, "VE": 1.0, "A": 0.8, "AE": 0.9,
+            "AO": 0.7, "AH": 0.7, "X": 0.3, "D": 0.4
+        }
+        norm_fema = zone_weights.get(str(fema_zone).upper()[:2], 0.2)
+        # Closer to water → higher risk
+        dist_km = (waterbody or {}).get("distance_km", 10.0)
+        norm_dist = clamp(1 - (float(dist_km) / 10.0))
+
+        # --- Weighted Flood Risk ---
+        elev_w, precip_w, fema_w, dist_w = 0.35, 0.25, 0.30, 0.10
+        flood_risk = (
+            (norm_elevation * elev_w)
+            + (norm_precip * precip_w)
+            + (norm_fema * fema_w)
+            + (norm_dist * dist_w)
+        )
         return jsonify({
             "success": True,
             "address": address,
@@ -333,9 +438,18 @@ def risk_summary():
             "earthquakeRisk": earthquake_risk,
             "faultDistanceNormalized": fault_dis,
             "pgauh": pgauh,
-            "landslideRisk": landslide_risk,
             "siteClass": site_class,
-            "riskCategory": risk_category
+            "riskCategory": risk_category,
+            "elevation_m": elevation,
+            "noaa_precip_mm": noaa_precip,
+            "fema_flood_zone": fema_data,
+            "nearestWaterbody": waterbody,
+    #flood stuff
+            "normalizedElevation": norm_elevation,
+            "normalizedPrecipitation": norm_precip,
+            "normalizedFEMAZone": norm_fema,
+            "normalizedDistanceToWater": norm_dist,
+            "floodRisk": round(float(flood_risk), 3)
         })
 
     except Exception as e:
