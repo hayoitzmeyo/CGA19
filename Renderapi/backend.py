@@ -44,22 +44,23 @@ def get_elevation(lat, lon):
         return None
 
 def get_noaa_precip(lat, lon, startdate, enddate):
-    token = "mZrOfwskAmScPKKmsBhejnjbSBVYunzO"
+    url = "https://www.ncei.noaa.gov/cdo-web/api/v2/data"
+    headers = {"token": "mZrOfwskAmScPKKmsBhejnjbSBVYunzO"}
     try:
-        # Step 1: Find nearest station
-        stations_url = "https://www.ncei.noaa.gov/cdo-web/api/v2/stations"
-        headers = {"token": token}
+        # Step 1: Find nearest station via bounding box
+        bbox_size = 0.1
+        extent = f"{lon - bbox_size},{lat - bbox_size},{lon + bbox_size},{lat + bbox_size}"
+        station_url = "https://www.ncei.noaa.gov/cdo-web/api/v2/stations"
         params = {
             "datasetid": "GHCND",
             "datatypeid": "PRCP",
+            "extent": extent,
+            "limit": 1,
             "sortfield": "distance",
             "sortorder": "asc",
-            "limit": 1,
-            "units": "metric",
-            "latitude": lat,
-            "longitude": lon,
+            "units": "metric"
         }
-        s_resp = requests.get(stations_url, headers=headers, params=params, timeout=10)
+        s_resp = requests.get(station_url, headers=headers, params=params, timeout=10)
         s_resp.raise_for_status()
         stations = s_resp.json().get("results", [])
         if not stations:
@@ -67,8 +68,7 @@ def get_noaa_precip(lat, lon, startdate, enddate):
             return None
         station_id = stations[0]["id"]
 
-        # Step 2: Query precipitation at that station
-        data_url = "https://www.ncei.noaa.gov/cdo-web/api/v2/data"
+        # Step 2: Query precipitation
         params = {
             "datasetid": "GHCND",
             "datatypeid": "PRCP",
@@ -76,23 +76,24 @@ def get_noaa_precip(lat, lon, startdate, enddate):
             "startdate": startdate,
             "enddate": enddate,
             "limit": 1,
-            "units": "metric",
+            "units": "metric"
         }
-        d_resp = requests.get(data_url, headers=headers, params=params, timeout=10)
+        d_resp = requests.get(url, headers=headers, params=params, timeout=10)
         d_resp.raise_for_status()
         data = d_resp.json()
         if "results" in data and len(data["results"]) > 0:
             return data["results"][0].get("value")
         return None
-
     except Exception as e:
         print(f"NOAA fetch error: {e}")
         return None
 
 
+
 import time
 
 def get_fema_flood_data(lat, lon, retries=3):
+    import time
     url = "https://api.nationalflooddata.com/v3/data"
     headers = {"X-Api-Key": "ESKxETVHZm4pZXY6WH9UjkUhtDnAVT73TJXblPg8"}
     params = {"latitude": lat, "longitude": lon}
@@ -114,6 +115,7 @@ def get_fema_flood_data(lat, lon, retries=3):
             print(f"FEMA flood API error: {e}")
             time.sleep(1)
     return None
+
 
 def approximate_distance_km(lat1, lon1, lat2, lon2):
     """
