@@ -23,12 +23,24 @@ def normalizesdi(sdi, high_cutoff=40, min_sdi=0):
     return min(normalized, 1.0)
 
 def get_coordinates(address):
-    url = f"https://nominatim.openstreetmap.org/search?q={address}&format=json&limit=1"
-    response1 = requests.get(url, headers={"User-Agent": "risk-app"})
-    data = response1.json()
+    import requests
+    url = "https://nominatim.openstreetmap.org/search"
+    params = {
+        "q": address,
+        "format": "json",
+        "limit": 1
+    }
+    headers = {
+        "User-Agent": "Georisk/1.0 (contact: Harnoor.Sethi27@bcp.org)"  # <-- MUST include contact
+    }
+
+    response = requests.get(url, params=params, headers=headers, timeout=10)
+    response.raise_for_status()  
+    data = response.json()
     if not data:
         return None
-    return float(data[0]['lat']), float(data[0]['lon'])
+    return float(data[0]["lat"]), float(data[0]["lon"])
+
 
 def gethousingunitrisk(lat, lon):
     url = "https://apps.fs.usda.gov/fsgisx01/rest/services/RDW_Wildfire/RMRS_WRC_HousingUnitRisk/ImageServer/identify"

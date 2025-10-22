@@ -54,22 +54,23 @@ def safe_api_get(url, params=None, headers=None, method="get", json_body=None, t
 # Geocoding + misc
 # -----------------------
 def get_coordinates(address):
-    """Nominatim lookup (single result)"""
-    try:
-        url = "https://nominatim.openstreetmap.org/search"
-        params = {"q": address, "format": "json", "limit": 1}
-        headers = {
-        "User-Agent": "Georisk/1.0 (contact: Harnoor.Sethi27@bcp.org)"
-         }
-        r = safe_api_get(url, params=params, timeout=15)
-        if not r:
-            return None
-        if isinstance(r, list) and len(r) >= 1:
-            return float(r[0]["lat"]), float(r[0]["lon"])
+    import requests
+    url = "https://nominatim.openstreetmap.org/search"
+    params = {
+        "q": address,
+        "format": "json",
+        "limit": 1
+    }
+    headers = {
+        "User-Agent": "Georisk/1.0 (contact: Harnoor.Sethi27@bcp.org)"  # <-- MUST include contact
+    }
+
+    response = requests.get(url, params=params, headers=headers, timeout=10)
+    response.raise_for_status()  
+    data = response.json()
+    if not data:
         return None
-    except Exception as e:
-        print(f"Error getting coordinates: {e}")
-        return None
+    return float(data[0]["lat"]), float(data[0]["lon"])
 
 def get_elevation(lat, lon):
     try:
