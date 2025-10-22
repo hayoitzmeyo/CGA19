@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
 import requests
 import pyproj
+import math
 import geopandas as gpd
 from shapely.geometry import Point
 import overpy
@@ -83,22 +84,106 @@ def get_fema_flood_data(lat, lon):
     except Exception as e:
         print(f"FEMA flood API error: {e}")
         return None
-def get_closest_waterbody(lat, lon):
-    url = "https://api.wateratlas.usf.edu/waterbodies/closest"
-    params = {"latitude": lat, "longitude": lon}
-    try:
-        response = requests.get(url, params=params, timeout=10)
-        response.raise_for_status()
-        data = response.json()
-        # Example for returning main attributes
-        return {
-            "name": data.get("name"),
-            "distance_km": data.get("distance_km") or data.get("distance_miles", 0) * 1.60934
-        }
 
-    except Exception as e:
-        print(f"Water Atlas API error: {e}")
+def get_distance_to_nearest_water_by_coords(lat, lon, max_radius_m=5000):
+
+    overpass_query = f"""
+    [out:json][timeout:10];
+    (
+      node["water"](around:{max_radius_m},{lat},{lon});
+      way["water"](around:{max_radius_m},{lat},{lon});
+      way["natural"="water"](around:{max_radius_m},{lat},{lon});
+      relation["natural"="water"](around:{max_radius_m},{lat},{lon});
+      way["waterway"="riverbank"](around:{max_radius_m},{lat},{lon});
+      relation["waterway"="riverbank"](around:{max_radius_m},{lat},{lon});
+    );
+    out center qt 100;
+    """
+    overpass_url = "https://overpass-api.de/api/interpreter"
+    res = requests.post(overpass_url, data=overpass_query, headers={"User-Agent": "risk-app"})
+    if res.status_code != 200:
         return None
+    data = res.json()
+
+    def haversine(lat1, lon1, lat2, lon2):
+        R = 6371  # Earth radius in km
+        phi1, phi2 = math.radians(lat1), math.radians(lat2)
+        d_phi = math.radians(lat2 - lat1)
+        d_lambda = math.radians(lon2 - lon1)
+        a = math.sin(d_phi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(d_lambda/2)**2
+        c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+        return R * c
+
+    min_dist = None
+    for element in data.get("elements", []):
+        if "lat" in element and "lon" in element:
+            wlat, wlon = element["lat"], element["lon"]
+        elif "center" in element:
+            wlat, wlon = element["center"]["lat"], element["center"]["lon"]
+        else:
+            continue
+        dist = haversine(lat, lon, wlat, wlon)
+        if (min_dist is None) or (dist < min_dist):
+            min_dist = dist
+
+    return min_dist
+
+
+def approximate_distance_km(lat1, lon1, lat2, lon2):
+    """
+    Approximate distance in kilometers between two points using Euclidean distance 
+    with longitude scaled by cos(latitude).
+    Suitable for small distances where extreme precision is not critical.
+    """
+    # Constants: approximate length of 1 degree latitude and longitude in km
+    lat_km = 110.574
+    lon_km = 111.320 * math.cos(math.radians((lat1 + lat2) / 2))
+
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+
+    dx = dlon * lon_km
+    dy = dlat * lat_km
+
+    return math.sqrt(dx * dx + dy * dy)
+
+def get_distance_to_nearest_water_by_coords(lat, lon, max_radius_m=5000):
+    """
+    Given latitude and longitude, query OSM Overpass API for water bodies nearby, 
+    return the approximate distance in km using simple Euclidean approx above.
+    """
+    overpass_query = f"""
+    [out:json][timeout:10];
+    (
+      node["water"](around:{max_radius_m},{lat},{lon});
+      way["water"](around:{max_radius_m},{lat},{lon});
+      way["natural"="water"](around:{max_radius_m},{lat},{lon});
+      relation["natural"="water"](around:{max_radius_m},{lat},{lon});
+      way["waterway"="riverbank"](around:{max_radius_m},{lat},{lon});
+      relation["waterway"="riverbank"](around:{max_radius_m},{lat},{lon});
+    );
+    out center qt 100;
+    """
+    overpass_url = "https://overpass-api.de/api/interpreter"
+    response = requests.post(overpass_url, data=overpass_query, headers={"User-Agent": "risk-app"})
+    if response.status_code != 200:
+        return None
+    data = response.json()
+
+    min_dist = None
+    for element in data.get("elements", []):
+        if "lat" in element and "lon" in element:
+            wlat, wlon = element["lat"], element["lon"]
+        elif "center" in element:
+            wlat, wlon = element["center"]["lat"], element["center"]["lon"]
+        else:
+            continue
+        dist = approximate_distance_km(lat, lon, wlat, wlon)
+        if (min_dist is None) or (dist < min_dist):
+            min_dist = dist
+
+    return min_dist
+
 
 
 def get_air_quality(lat, lon):
@@ -400,7 +485,7 @@ def risk_summary():
         aqi = get_air_quality(lat, lon)
         earthquake_risk = get_earthquake_risk(lat, lon)
         elevation = get_elevation(lat, lon)
-        noaa_precip = get_noaa_precip(lat, lon, "2010-01-01", "2025-9-11")  
+        noaa_precip = get_noaa_precip(lat, lon, "2020-01-01", "2025-09-11")  
         fema_data = get_fema_flood_data(lat, lon)
         waterbody = get_closest_waterbody(lat, lon)
         def clamp(v, lo=0, hi=1):
