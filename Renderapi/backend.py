@@ -58,7 +58,10 @@ def get_coordinates(address):
     try:
         url = "https://nominatim.openstreetmap.org/search"
         params = {"q": address, "format": "json", "limit": 1}
-        r = safe_api_get(url, params=params, timeout=10)
+        headers = {
+        "User-Agent": "Georisk/1.0 (contact: Harnoor.Sethi27@bcp.org)"
+         }
+        r = safe_api_get(url, params=params, timeout=15)
         if not r:
             return None
         if isinstance(r, list) and len(r) >= 1:
