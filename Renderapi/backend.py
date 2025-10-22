@@ -7,6 +7,7 @@ from shapely.geometry import Point
 import overpy
 import numpy as np
 import io
+import time
 
 bp = Blueprint("backend", __name__)
 
@@ -43,33 +44,46 @@ def get_elevation(lat, lon):
         print(f"Elevation fetch error: {e}")
         return None
 
+
 def get_noaa_precip(lat, lon, startdate, enddate):
-    url = "https://www.ncei.noaa.gov/cdo-web/api/v2/data"
+    """
+    Find nearest GHCND station using a small lat/lon bbox and then query PRCP
+    Returns numeric precipitation value (units determined by 'units' param)
+    """
+    data_url = "https://www.ncei.noaa.gov/cdo-web/api/v2/data"
+    station_url = "https://www.ncei.noaa.gov/cdo-web/api/v2/stations"
     headers = {"token": "mZrOfwskAmScPKKmsBhejnjbSBVYunzO"}
     try:
-        # Step 1: Find nearest station via bounding box
+        # bounding box must be lat_min,lon_min,lat_max,lon_max
         bbox_size = 0.1
-        extent = f"{lon - bbox_size},{lat - bbox_size},{lon + bbox_size},{lat + bbox_size}"
-        station_url = "https://www.ncei.noaa.gov/cdo-web/api/v2/stations"
-        params = {
+        extent = f"{lat - bbox_size},{lon - bbox_size},{lat + bbox_size},{lon + bbox_size}"
+
+        params_station = {
             "datasetid": "GHCND",
             "datatypeid": "PRCP",
             "extent": extent,
             "limit": 1,
             "sortfield": "distance",
-            "sortorder": "asc",
-            "units": "metric"
+            "sortorder": "asc"
         }
-        s_resp = requests.get(station_url, headers=headers, params=params, timeout=10)
-        s_resp.raise_for_status()
-        stations = s_resp.json().get("results", [])
+
+        s_resp = requests.get(station_url, headers=headers, params=params_station, timeout=12)
+        # If NOAA returns client error, print body to help debug
+        if s_resp.status_code >= 400:
+            print(f"NOAA stations returned {s_resp.status_code}: {s_resp.text}")
+            s_resp.raise_for_status()
+        s_json = s_resp.json()
+        stations = s_json.get("results", []) if isinstance(s_json, dict) else []
         if not stations:
             print("No NOAA stations found nearby")
             return None
-        station_id = stations[0]["id"]
+        station_id = stations[0].get("id")
+        if not station_id:
+            print("Station record missing id")
+            return None
 
-        # Step 2: Query precipitation
-        params = {
+        # Step 2: Query precipitation at the station (units supported here)
+        params_data = {
             "datasetid": "GHCND",
             "datatypeid": "PRCP",
             "stationid": station_id,
@@ -78,8 +92,10 @@ def get_noaa_precip(lat, lon, startdate, enddate):
             "limit": 1,
             "units": "metric"
         }
-        d_resp = requests.get(url, headers=headers, params=params, timeout=10)
-        d_resp.raise_for_status()
+        d_resp = requests.get(data_url, headers=headers, params=params_data, timeout=12)
+        if d_resp.status_code >= 400:
+            print(f"NOAA data returned {d_resp.status_code}: {d_resp.text}")
+            d_resp.raise_for_status()
         data = d_resp.json()
         if "results" in data and len(data["results"]) > 0:
             return data["results"][0].get("value")
@@ -89,11 +105,11 @@ def get_noaa_precip(lat, lon, startdate, enddate):
         return None
 
 
-
-import time
-
 def get_fema_flood_data(lat, lon, retries=3):
-    import time
+    """
+    Query nationalflooddata. Returns dict on success, returns {} on failure.
+    Uses exponential backoff for 429 responses.
+    """
     url = "https://api.nationalflooddata.com/v3/data"
     headers = {"X-Api-Key": "ESKxETVHZm4pZXY6WH9UjkUhtDnAVT73TJXblPg8"}
     params = {"latitude": lat, "longitude": lon}
@@ -107,14 +123,26 @@ def get_fema_flood_data(lat, lon, retries=3):
                 time.sleep(wait)
                 continue
             response.raise_for_status()
-            data = response.json()
-            flood_zone = data.get("flood_zone")
-            flood_risk = data.get("flood_risk")
-            return {"zone": flood_zone, "risk": flood_risk}
+            # parse JSON safely
+            try:
+                data = response.json()
+            except ValueError:
+                print("FEMA response not JSON")
+                return {}
+            if isinstance(data, dict):
+                flood_zone = data.get("flood_zone")
+                flood_risk = data.get("flood_risk")
+                return {"zone": flood_zone, "risk": flood_risk}
+            else:
+                return {}
+        except requests.HTTPError as he:
+            print(f"FEMA flood API HTTP error: {he}")
+            time.sleep(1)
         except Exception as e:
             print(f"FEMA flood API error: {e}")
             time.sleep(1)
-    return None
+    # if all retries fail, return an empty dict (so callers can .get safely)
+    return {}
 
 
 def approximate_distance_km(lat1, lon1, lat2, lon2):
@@ -136,11 +164,11 @@ def approximate_distance_km(lat1, lon1, lat2, lon2):
 
     return math.sqrt(dx*dx + dy*dy)
 
+
 def get_closest_waterbody(lat, lon, max_radius_m=5000):
     """
     Query OpenStreetMap Overpass API for water bodies near (lat, lon).
-    Returns approximate distance in kilometers of the closest water body using
-    Euclidean lat/lon distance approximation.
+    Returns approximate distance in kilometers of the closest water body (float) or None.
     """
     overpass_query = f"""
     [out:json][timeout:10];
@@ -155,10 +183,15 @@ def get_closest_waterbody(lat, lon, max_radius_m=5000):
     out center qt 100;
     """
     overpass_url = "https://overpass-api.de/api/interpreter"
-    response = requests.post(overpass_url, data=overpass_query, headers={"User-Agent": "risk-app"})
-    if response.status_code != 200:
+    try:
+        response = requests.post(overpass_url, data=overpass_query, headers={"User-Agent": "risk-app"}, timeout=15)
+        if response.status_code != 200:
+            print(f"Overpass returned {response.status_code}")
+            return None
+        data = response.json()
+    except Exception as e:
+        print(f"Overpass error: {e}")
         return None
-    data = response.json()
 
     min_dist = None
     for element in data.get("elements", []):
@@ -174,8 +207,7 @@ def get_closest_waterbody(lat, lon, max_radius_m=5000):
         if (min_dist is None) or (dist < min_dist):
             min_dist = dist
 
-    return min_dist
-
+    return min_dist  # float km or None
 
 
 def get_air_quality(lat, lon):
@@ -185,7 +217,7 @@ def get_air_quality(lat, lon):
         response = requests.get(url, timeout=10)
         response.raise_for_status()
         data = response.json()
-        
+
         if 'hourly' in data and 'us_aqi' in data['hourly'] and data['hourly']['us_aqi']:
             # Filter out None values and return the first valid one
             aqi_values = [x for x in data['hourly']['us_aqi'] if x is not None]
@@ -227,7 +259,7 @@ def get_faultDis(lat, lon):
 
         response = requests.get(url, params=params, timeout=15)
         response.raise_for_status()
-        
+
         # Check if response has content
         if not response.content:
             print("Empty response from USGS fault service")
@@ -235,11 +267,11 @@ def get_faultDis(lat, lon):
 
         # Read GeoJSON directly from response content
         faults = gpd.read_file(io.StringIO(response.text))
-        
+
         if faults.empty:
             print("No faults found in the area")
             return 0
-            
+
         # Transform to appropriate projection for distance calculation
         faults = faults.to_crs(epsg=3310)
         pt = gpd.GeoDataFrame({"geometry": [Point(lon, lat)]}, crs="EPSG:4326").to_crs(epsg=3310)
@@ -247,7 +279,7 @@ def get_faultDis(lat, lon):
         # Calculate minimum distance
         distances = faults.geometry.distance(pt.geometry.iloc[0])
         min_dist = distances.min()
-        
+
         if min_dist is not None and min_dist > 0:
             # Return normalized value (inverse of distance, capped for very large distances)
             normalized = min(1.0, 1 / (min_dist / 1000))  # Convert to km first
@@ -272,10 +304,10 @@ def get_siteClass(lat, lon):
         response = requests.get(url, params=params, timeout=10)
         response.raise_for_status()
         data = response.json()
-        
+
         if "response" not in data or "data" not in data["response"]:
             return "C"  # Default site class
-            
+
         vs30 = data["response"]["data"].get("vs30", 0)
 
         if vs30 > 1500:
@@ -310,17 +342,17 @@ def get_buildingType(lat, lon, length):
         out tags center;
         """
         result = api.query(query)
-        
+
         for way in result.ways:
             building_type = way.tags.get("building")
             if building_type and building_type != "yes":
                 return building_type
-        
+
         # If no specific building type found, check for "yes"
         for way in result.ways:
             if way.tags.get("building") == "yes":
                 return "yes"
-        
+
         return None
     except Exception as e:
         print(f"Error getting building type: {e}")
@@ -361,7 +393,7 @@ def get_pgauh(lat, lon):
     try:
         siteClass = get_siteClass(lat, lon)
         riskCategory = get_riskCategory(lat, lon)
-        
+
         url = "https://earthquake.usgs.gov/ws/designmaps/asce7-22.json"
         params = {
             "latitude": lat,
@@ -373,7 +405,7 @@ def get_pgauh(lat, lon):
         response = requests.get(url, params=params, timeout=15)
         response.raise_for_status()
         data = response.json()
-        
+
         if "response" in data and "data" in data["response"] and "underlyingData" in data["response"]["data"]:
             hazard_list = data["response"]["data"]["underlyingData"].get("pgauh", [])
             return hazard_list if hazard_list else [0.0]
@@ -403,8 +435,9 @@ def get_lhasaRisk(lat, lon, pad):
         response = requests.get(url, params=params, timeout=15)
         response.raise_for_status()
         data = response.json()
-        
+
         if not data.get("results") or len(data["results"]) == 0:
+            # quiet message, not an error
             print("No landslide data found for location")
             return 0.0
 
@@ -413,7 +446,7 @@ def get_lhasaRisk(lat, lon, pad):
             return float(value) / 5.0  # Normalize to 0-1 scale
         return 0.0
     except Exception as e:
-        print("Error getting landslide risk: {e}")
+        print(f"Error getting landslide risk: {e}")
         return 0.0
 
 
@@ -422,9 +455,9 @@ def safe_sqrt_transform(x, y, z):
     try:
         # Ensure all values are numeric and non-negative
         x = max(0, float(x) if x is not None else 0)
-        y = max(0, float(y) if y is not None else 0)  
+        y = max(0, float(y) if y is not None else 0)
         z = max(0, float(z) if z is not None else 0)
-        
+
         vars_array = np.array([x, y, z])
         root_vars = np.sqrt(vars_array)
         avg = np.mean(root_vars)
@@ -440,13 +473,17 @@ def get_earthquake_risk(lat, lon):
         faultDis = get_faultDis(lat, lon)
         pgauh = get_pgauh(lat, lon)
         lhasaRisk = get_lhasaRisk(lat, lon, 0.01) or 0
-        
+
         # Handle pgauh - could be list or single value
         if isinstance(pgauh, list) and pgauh:
             pgauh_avg = np.mean([x for x in pgauh if x is not None])
         else:
-            pgauh_avg = float(pgauh) if pgauh is not None else 0
-            
+            # if pgauh is list-like but empty, fallback to 0
+            try:
+                pgauh_avg = float(pgauh)
+            except Exception:
+                pgauh_avg = 0.0
+
         return safe_sqrt_transform(faultDis, pgauh_avg, lhasaRisk)
     except Exception as e:
         print(f"Error calculating earthquake risk: {e}")
@@ -459,13 +496,13 @@ def risk_summary():
         data = request.json
         if not data or 'address' not in data:
             return jsonify({"error": "Address is required"}), 400
-            
+
         address = data.get('address')
         coords = get_coordinates(address)
-        
+
         if not coords:
             return jsonify({"error": "Address not found"}), 400
-            
+
         lat, lon = coords
 
         # Get all risk components with error handling
@@ -477,9 +514,10 @@ def risk_summary():
         aqi = get_air_quality(lat, lon)
         earthquake_risk = get_earthquake_risk(lat, lon)
         elevation = get_elevation(lat, lon)
-        noaa_precip = get_noaa_precip(lat, lon, "2020-01-01", "2025-09-11")  
-        fema_data = get_fema_flood_data(lat, lon)
+        noaa_precip = get_noaa_precip(lat, lon, "2020-01-01", "2025-09-11")
+        fema_data = get_fema_flood_data(lat, lon) or {}
         waterbody = get_closest_waterbody(lat, lon)
+
         def clamp(v, lo=0, hi=1):
             try:
                 return max(lo, min(hi, float(v)))
@@ -488,14 +526,24 @@ def risk_summary():
 
         norm_elevation = clamp(1 - (float(elevation or 0) / 500.0))
         norm_precip = clamp((float(noaa_precip or 0) / 2000.0))
-        fema_zone = (fema_data or {}).get("zone") if fema_data else None
+
+        # fema_data guaranteed to be dict (possibly empty) now
+        fema_zone = fema_data.get("zone") if isinstance(fema_data, dict) else None
         zone_weights = {
             "V": 1.0, "VE": 1.0, "A": 0.8, "AE": 0.9,
             "AO": 0.7, "AH": 0.7, "X": 0.3, "D": 0.4
         }
         norm_fema = zone_weights.get(str(fema_zone).upper()[:2], 0.2)
-        # Closer to water → higher risk
-        dist_km = (waterbody or {}).get("distance_km", 10.0)
+
+        # Closer to water → higher risk. get_closest_waterbody returns float km or None
+        if isinstance(waterbody, (int, float)):
+            dist_km = float(waterbody)
+        elif isinstance(waterbody, dict):
+            # defensive: in case some future change returns dict
+            dist_km = float(waterbody.get("distance_km", 10.0))
+        else:
+            dist_km = 10.0
+
         norm_dist = clamp(1 - (float(dist_km) / 10.0))
 
         # --- Weighted Flood Risk ---
@@ -520,8 +568,8 @@ def risk_summary():
             "elevation_m": elevation,
             "noaa_precip_mm": noaa_precip,
             "fema_flood_zone": fema_data,
-            "nearestWaterbody": waterbody,
-    #flood stuff
+            "nearestWaterbody_km": dist_km,
+            # flood stuff
             "normalizedElevation": norm_elevation,
             "normalizedPrecipitation": norm_precip,
             "normalizedFEMAZone": norm_fema,
