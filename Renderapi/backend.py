@@ -44,113 +44,101 @@ def get_elevation(lat, lon):
         return None
 
 def get_noaa_precip(lat, lon, startdate, enddate):
-    url = "https://www.ncei.noaa.gov/cdo-web/api/v2/data"
-    headers = {"token": "mZrOfwskAmScPKKmsBhejnjbSBVYunzO"}
-    params = {
-        "datasetid": "GHCND",
-        "datatypeid": "PRCP",
-        "startdate": startdate,
-        "enddate": enddate,
-        "limit": 1,
-        "units": "metric",
-        "latitude": lat,
-        "longitude": lon
-    }
+    token = "mZrOfwskAmScPKKmsBhejnjbSBVYunzO"
     try:
-        response = requests.get(url, headers=headers, params=params, timeout=12)
-        response.raise_for_status()
-        data = response.json()
+        # Step 1: Find nearest station
+        stations_url = "https://www.ncei.noaa.gov/cdo-web/api/v2/stations"
+        headers = {"token": token}
+        params = {
+            "datasetid": "GHCND",
+            "datatypeid": "PRCP",
+            "sortfield": "distance",
+            "sortorder": "asc",
+            "limit": 1,
+            "units": "metric",
+            "latitude": lat,
+            "longitude": lon,
+        }
+        s_resp = requests.get(stations_url, headers=headers, params=params, timeout=10)
+        s_resp.raise_for_status()
+        stations = s_resp.json().get("results", [])
+        if not stations:
+            print("No NOAA stations found nearby")
+            return None
+        station_id = stations[0]["id"]
+
+        # Step 2: Query precipitation at that station
+        data_url = "https://www.ncei.noaa.gov/cdo-web/api/v2/data"
+        params = {
+            "datasetid": "GHCND",
+            "datatypeid": "PRCP",
+            "stationid": station_id,
+            "startdate": startdate,
+            "enddate": enddate,
+            "limit": 1,
+            "units": "metric",
+        }
+        d_resp = requests.get(data_url, headers=headers, params=params, timeout=10)
+        d_resp.raise_for_status()
+        data = d_resp.json()
         if "results" in data and len(data["results"]) > 0:
             return data["results"][0].get("value")
         return None
+
     except Exception as e:
         print(f"NOAA fetch error: {e}")
         return None
 
 
-def get_fema_flood_data(lat, lon):
+import time
+
+def get_fema_flood_data(lat, lon, retries=3):
     url = "https://api.nationalflooddata.com/v3/data"
     headers = {"X-Api-Key": "ESKxETVHZm4pZXY6WH9UjkUhtDnAVT73TJXblPg8"}
     params = {"latitude": lat, "longitude": lon}
-    try:
-        response = requests.get(url, headers=headers, params=params, timeout=12)
-        response.raise_for_status()
-        data = response.json()
-        # Parse whatever flood zone or risk attribute is available
-        flood_zone = data.get("flood_zone")
-        flood_risk = data.get("flood_risk")
-        return {"zone": flood_zone, "risk": flood_risk}
 
-    except Exception as e:
-        print(f"FEMA flood API error: {e}")
-        return None
-
-def get_distance_to_nearest_water_by_coords(lat, lon, max_radius_m=5000):
-
-    overpass_query = f"""
-    [out:json][timeout:10];
-    (
-      node["water"](around:{max_radius_m},{lat},{lon});
-      way["water"](around:{max_radius_m},{lat},{lon});
-      way["natural"="water"](around:{max_radius_m},{lat},{lon});
-      relation["natural"="water"](around:{max_radius_m},{lat},{lon});
-      way["waterway"="riverbank"](around:{max_radius_m},{lat},{lon});
-      relation["waterway"="riverbank"](around:{max_radius_m},{lat},{lon});
-    );
-    out center qt 100;
-    """
-    overpass_url = "https://overpass-api.de/api/interpreter"
-    res = requests.post(overpass_url, data=overpass_query, headers={"User-Agent": "risk-app"})
-    if res.status_code != 200:
-        return None
-    data = res.json()
-
-    def haversine(lat1, lon1, lat2, lon2):
-        R = 6371  # Earth radius in km
-        phi1, phi2 = math.radians(lat1), math.radians(lat2)
-        d_phi = math.radians(lat2 - lat1)
-        d_lambda = math.radians(lon2 - lon1)
-        a = math.sin(d_phi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(d_lambda/2)**2
-        c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-        return R * c
-
-    min_dist = None
-    for element in data.get("elements", []):
-        if "lat" in element and "lon" in element:
-            wlat, wlon = element["lat"], element["lon"]
-        elif "center" in element:
-            wlat, wlon = element["center"]["lat"], element["center"]["lon"]
-        else:
-            continue
-        dist = haversine(lat, lon, wlat, wlon)
-        if (min_dist is None) or (dist < min_dist):
-            min_dist = dist
-
-    return min_dist
-
+    for attempt in range(retries):
+        try:
+            response = requests.get(url, headers=headers, params=params, timeout=12)
+            if response.status_code == 429:
+                wait = 2 ** attempt
+                print(f"Rate limited by FEMA, retrying in {wait}s...")
+                time.sleep(wait)
+                continue
+            response.raise_for_status()
+            data = response.json()
+            flood_zone = data.get("flood_zone")
+            flood_risk = data.get("flood_risk")
+            return {"zone": flood_zone, "risk": flood_risk}
+        except Exception as e:
+            print(f"FEMA flood API error: {e}")
+            time.sleep(1)
+    return None
 
 def approximate_distance_km(lat1, lon1, lat2, lon2):
     """
-    Approximate distance in kilometers between two points using Euclidean distance 
-    with longitude scaled by cos(latitude).
-    Suitable for small distances where extreme precision is not critical.
+    Approximate distance in kilometers between two geographical points using
+    Euclidean distance with longitude scaled by cosine of the mean latitude.
+    Suitable for small to moderate distances.
     """
-    # Constants: approximate length of 1 degree latitude and longitude in km
-    lat_km = 110.574
-    lon_km = 111.320 * math.cos(math.radians((lat1 + lat2) / 2))
+    mean_lat = math.radians((lat1 + lat2) / 2.0)
+    delta_lat = lat2 - lat1
+    delta_lon = lon2 - lon1
 
-    dlat = lat2 - lat1
-    dlon = lon2 - lon1
+    # Length of degrees (kilometers)
+    km_per_deg_lat = 110.574
+    km_per_deg_lon = 111.320 * math.cos(mean_lat)
 
-    dx = dlon * lon_km
-    dy = dlat * lat_km
+    dx = delta_lon * km_per_deg_lon
+    dy = delta_lat * km_per_deg_lat
 
-    return math.sqrt(dx * dx + dy * dy)
+    return math.sqrt(dx*dx + dy*dy)
 
-def get_distance_to_nearest_water_by_coords(lat, lon, max_radius_m=5000):
+def get_closest_waterbody(lat, lon, max_radius_m=5000):
     """
-    Given latitude and longitude, query OSM Overpass API for water bodies nearby, 
-    return the approximate distance in km using simple Euclidean approx above.
+    Query OpenStreetMap Overpass API for water bodies near (lat, lon).
+    Returns approximate distance in kilometers of the closest water body using
+    Euclidean lat/lon distance approximation.
     """
     overpass_query = f"""
     [out:json][timeout:10];
@@ -178,7 +166,9 @@ def get_distance_to_nearest_water_by_coords(lat, lon, max_radius_m=5000):
             wlat, wlon = element["center"]["lat"], element["center"]["lon"]
         else:
             continue
+
         dist = approximate_distance_km(lat, lon, wlat, wlon)
+
         if (min_dist is None) or (dist < min_dist):
             min_dist = dist
 
