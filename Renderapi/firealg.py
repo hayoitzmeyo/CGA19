@@ -11,6 +11,28 @@ def latlontowebmercator(lat, lon):
     x, y = transformer.transform(lon, lat)
     return x, y
 
+
+import time
+
+def safe_get_json(url, params=None, headers=None, retries=3, backoff=2):
+    headers = headers or {"User-Agent": "GeoRisk/1.0 (contact: your_email@example.com)"}
+    for attempt in range(1, retries+1):
+        try:
+            resp = requests.get(url, params=params, headers=headers, timeout=20)
+            if resp.status_code != 200:
+                print(f"Attempt {attempt}: {url} returned {resp.status_code}")
+                time.sleep(backoff ** attempt)
+                continue
+            return resp.json()
+        except requests.exceptions.JSONDecodeError:
+            print(f"Attempt {attempt}: Invalid JSON from {url}")
+            print(resp.text[:500])
+            time.sleep(backoff ** attempt)
+        except requests.exceptions.RequestException as e:
+            print(f"Attempt {attempt}: Request failed: {e}")
+            time.sleep(backoff ** attempt)
+    return None
+
 def normalizesdi(sdi, high_cutoff=40, min_sdi=0):
     if sdi is None:
         return None
@@ -56,20 +78,22 @@ def gethousingunitrisk(lat, lon):
         'returnGeometry': 'false',
         'f': 'json'
     }
-    response = requests.get(url, params=params)
-    data = response.json()
+    data = safe_get_json(url, params=params)
+    if not data:
+        return None
+
     value = data.get('value')
-    try:
-        if value is not None and value != "NoData":
+    if value is not None and value != "NoData":
+        try:
             return float(value)
-    except Exception:
-        pass
-    values = data.get('properties', {}).get('Values', [])
-    for v in values:
+        except:
+            pass
+
+    for v in data.get('properties', {}).get('Values', []):
         if v is not None and v != "NoData":
             try:
                 return float(v)
-            except Exception:
+            except:
                 continue
     return None
 
