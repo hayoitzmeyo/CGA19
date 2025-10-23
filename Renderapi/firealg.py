@@ -1,18 +1,16 @@
 from flask import Blueprint, request, jsonify
 import requests
 import pyproj
-import numpy as np
 import math
+import time
 
 bp = Blueprint("firealg", __name__)
 
+# ----------------- Utilities -----------------
 def latlontowebmercator(lat, lon):
     transformer = pyproj.Transformer.from_crs("EPSG:4326", "EPSG:3857", always_xy=True)
     x, y = transformer.transform(lon, lat)
     return x, y
-
-
-import time
 
 def safe_get_json(url, params=None, headers=None, retries=3, backoff=2):
     headers = headers or {"User-Agent": "GeoRisk/1.0 (contact: your_email@example.com)"}
@@ -24,7 +22,7 @@ def safe_get_json(url, params=None, headers=None, retries=3, backoff=2):
                 time.sleep(backoff ** attempt)
                 continue
             return resp.json()
-        except requests.exceptions.JSONDecodeError:
+        except (requests.exceptions.JSONDecodeError, ValueError):
             print(f"Attempt {attempt}: Invalid JSON from {url}")
             print(resp.text[:500])
             time.sleep(backoff ** attempt)
@@ -44,25 +42,33 @@ def normalizesdi(sdi, high_cutoff=40, min_sdi=0):
     normalized = (sdi - min_sdi) / (high_cutoff - min_sdi)
     return min(normalized, 1.0)
 
-def get_coordinates(address):
-    import requests
-    url = "https://nominatim.openstreetmap.org/search"
-    params = {
-        "q": address,
-        "format": "json",
-        "limit": 1
-    }
-    headers = {
-        "User-Agent": "Georisk/1.0 (contact: Harnoor.Sethi27@bcp.org)" 
-    }
+def quantilenormalizer(value, high, low):
+    if value is None or value == "NoData":
+        return None
+    try:
+        value = float(value)
+    except (ValueError, TypeError):
+        return None
+    value = max(low, value)
+    normalized = (value - low) / (high - low)
+    return min(normalized, 1.0)
 
-    response = requests.get(url, params=params, headers=headers, timeout=20)
-    response.raise_for_status()  
-    data = response.json()
+def normalizefirecount(firecount, radius_km=60, years=5, min_density=0, max_density=0.00049):
+    area_km2 = math.pi * (radius_km ** 2)
+    annual_density = firecount / (area_km2 * years)
+    normalized = (annual_density - min_density) / (max_density - min_density)
+    normalized = max(0, min(normalized, 1))
+    return normalized
+
+# ----------------- API Helpers -----------------
+def get_coordinates(address):
+    url = "https://nominatim.openstreetmap.org/search"
+    params = {"q": address, "format": "json", "limit": 1}
+    headers = {"User-Agent": "GeoRisk/1.0 (contact: your_email@example.com)"}
+    data = safe_get_json(url, params=params, headers=headers)
     if not data:
         return None
     return float(data[0]["lat"]), float(data[0]["lon"])
-
 
 def gethousingunitrisk(lat, lon):
     url = "https://apps.fs.usda.gov/fsgisx01/rest/services/RDW_Wildfire/RMRS_WRC_HousingUnitRisk/ImageServer/identify"
@@ -88,7 +94,6 @@ def gethousingunitrisk(lat, lon):
             return float(value)
         except:
             pass
-
     for v in data.get('properties', {}).get('Values', []):
         if v is not None and v != "NoData":
             try:
@@ -111,53 +116,23 @@ def getburnprobability(lat, lon):
         'returnGeometry': 'false',
         'f': 'json'
     }
-    headers = {"User-Agent": "GeoRisk/1.0 (contact: your_email@example.com)"}
-
-    response = requests.get(url, params=params, headers=headers, timeout=20)
-    if response.status_code != 200:
-        print(f"BurnProb API returned status {response.status_code}: {response.text[:200]}")
-        return None
-
-    try:
-        data = response.json()
-    except ValueError:
-        print("BurnProb API invalid JSON:", response.text[:200])
+    data = safe_get_json(url, params=params)
+    if not data:
         return None
 
     value = data.get('value')
-    try:
-        if value is not None and value != "NoData":
+    if value is not None and value != "NoData":
+        try:
             return float(value)
-    except Exception:
-        pass
-
-    values = data.get('properties', {}).get('Values', [])
-    for v in values:
+        except:
+            pass
+    for v in data.get('properties', {}).get('Values', []):
         if v is not None and v != "NoData":
             try:
                 return float(v)
-            except Exception:
+            except:
                 continue
     return None
-
-
-def normalizefirecount(firecount, radius_km=60, years=5, min_density=0, max_density=0.00049):
-    area_km2 = math.pi * (radius_km ** 2)
-    annual_density = firecount / (area_km2 * years)
-    normalized = (annual_density - min_density) / (max_density - min_density)
-    normalized = max(0, min(normalized, 1)) 
-    return normalized
-
-def quantilenormalizer(burnprob, high_risk_cutoff, min_burnprob):
-    if burnprob is None or burnprob == "NoData":
-        return None
-    try:
-        burnprob = float(burnprob)
-    except (ValueError, TypeError):
-        return None
-    burnprob = max(min_burnprob, burnprob)
-    normalized = (burnprob - min_burnprob) / (high_risk_cutoff - min_burnprob)
-    return min(normalized, 1.0)
 
 def historicalfiredensity(lat, lon, radius_km=60):
     url = "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_FireOccurrenceAndPerimeter_01/MapServer/8/query"
@@ -172,9 +147,9 @@ def historicalfiredensity(lat, lon, radius_km=60):
         "returnCountOnly": "true",
         "f": "json"
     }
-    resp = requests.get(url, params=params)
-    resp.raise_for_status()
-    data = resp.json()
+    data = safe_get_json(url, params=params)
+    if not data:
+        return 0
     return data.get("count", 0)
 
 def getsuppressiondifficulty(lat, lon, radiuskm=60):
@@ -193,8 +168,10 @@ def getsuppressiondifficulty(lat, lon, radiuskm=60):
         'returnAllPixelValues': 'true', 
         'f': 'json'
     }
-    response = requests.get(url, params=params)
-    data = response.json()
+    data = safe_get_json(url, params=params)
+    if not data:
+        return None
+
     values = []
     if 'properties' in data and 'Values' in data['properties']:
         for v in data['properties']['Values']:
@@ -214,6 +191,7 @@ def getsuppressiondifficulty(lat, lon, radiuskm=60):
             pass
     return None
 
+# ----------------- Flask Route -----------------
 @bp.route('/fire-risk-summary', methods=['POST'])
 def fire_risk_summary():
     try:
@@ -226,6 +204,7 @@ def fire_risk_summary():
         lat, lon = coords
         print("Coordinates:", coords)
 
+        # Get all risk inputs safely
         burnprob = getburnprobability(lat, lon) or 0
         hurisk = gethousingunitrisk(lat, lon) or 0
         sdi = getsuppressiondifficulty(lat, lon) or 0
