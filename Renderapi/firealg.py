@@ -220,29 +220,46 @@ def fire_risk_summary():
         data = request.json
         address = data.get('address')
         coords = get_coordinates(address)
-        print("Coordinates:", coords)
+        if not coords:
+            return jsonify({"error": "Invalid address"}), 400
 
         lat, lon = coords
-        print("Getting burn probability")
-        burnprob = getburnprobability(lat, lon)
-        print("Burn probability:", burnprob)
+        print("Coordinates:", coords)
 
-        print("Getting housing unit risk")
-        hurisk = gethousingunitrisk(lat, lon)
-        print("Housing unit risk:", hurisk)
+        burnprob = getburnprobability(lat, lon) or 0
+        hurisk = gethousingunitrisk(lat, lon) or 0
+        sdi = getsuppressiondifficulty(lat, lon) or 0
+        firecount = historicalfiredensity(lat, lon) or 0
 
-        print("Getting suppression difficulty")
-        sdi = getsuppressiondifficulty(lat, lon)
-        print("Suppression difficulty:", sdi)
+        # Normalize values
+        harprobability = quantilenormalizer(burnprob, 1000, 50)
+        normhurisk = quantilenormalizer(hurisk, 700, 0)
+        normsdi = normalizesdi(sdi)
+        normfiredensity = normalizefirecount(firecount)
 
-        print("Getting historical fire density")
-        firecount = historicalfiredensity(lat, lon)
-        print("Fire count:", firecount)
-        
-        # (then the rest of your logic)
-        ...
+        # Weights
+        burnriskweight = 0.25
+        normhuweight = 0.3
+        normsdiweight = 0.15
+        normfiredensityweight = 0.3
+
+        # Compute general weighted risk safely
+        generalweightedrisk = (
+            (harprobability or 0) * burnriskweight +
+            (normhurisk or 0) * normhuweight +
+            (normfiredensity or 0) * normfiredensityweight +
+            (normsdi or 0) * normsdiweight
+        )
+
+        return jsonify({
+            "harprobability": harprobability,
+            "normhurisk": normhurisk,
+            "normsdi": normsdi,
+            "normfiredensity": normfiredensity,
+            "generalweightedrisk": generalweightedrisk
+        })
+
     except Exception as e:
         import traceback
         traceback.print_exc()
-        print("Error in /fire-risk-summary:", e)
         return jsonify({"error": str(e)}), 500
