@@ -569,7 +569,7 @@ def risk_summary():
         with ThreadPoolExecutor(max_workers=6) as ex:
             futures = {
                 ex.submit(get_elevation, lat, lon): "elevation",
-                ex.submit(get_noaa_precip, lat, lon, "2020-01-01", "2025-09-11"): "noaa_precip",
+                ex.submit(get_noaa_precip, lat, lon, "2024-10-01", "2025-09-11"): "noaa_precip",
                 ex.submit(get_fema_flood_data, lat, lon): "fema",
                 ex.submit(get_closest_waterbody, lat, lon): "waterbody",
                 ex.submit(get_air_quality, lat, lon): "aqi",

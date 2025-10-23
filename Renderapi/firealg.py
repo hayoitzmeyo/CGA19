@@ -183,29 +183,29 @@ def fire_risk_summary():
         data = request.json
         address = data.get('address')
         coords = get_coordinates(address)
-        if not coords:
-            return jsonify({"error": "no address"}), 400
-        normfiredensityweight = 0.30
-        normsdiweight = 0.15
-        burnriskweight = 0.25
-        normhuweight = 0.3
+        print("Coordinates:", coords)
+
         lat, lon = coords
+        print("Getting burn probability")
         burnprob = getburnprobability(lat, lon)
-        harprobability = quantilenormalizer(burnprob, 1000, 50)
+        print("Burn probability:", burnprob)
+
+        print("Getting housing unit risk")
         hurisk = gethousingunitrisk(lat, lon)
-        normhurisk = quantilenormalizer(hurisk, 700, 0)
+        print("Housing unit risk:", hurisk)
+
+        print("Getting suppression difficulty")
         sdi = getsuppressiondifficulty(lat, lon)
-        normsdi = normalizesdi(sdi)
+        print("Suppression difficulty:", sdi)
+
+        print("Getting historical fire density")
         firecount = historicalfiredensity(lat, lon)
-        normfiredensity = normalizefirecount(firecount)
-        generalweightedrisk = (harprobability * burnriskweight) + (normhurisk * normhuweight) + (normfiredensity * normfiredensityweight) + (normsdi * normsdiweight)
-        return jsonify({
-            "harprobability": harprobability,
-            "normhurisk": normhurisk,
-            "normsdi": normsdi,
-            "normfiredensity": normfiredensity,
-            "generalweightedrisk": generalweightedrisk
-        })
+        print("Fire count:", firecount)
+        
+        # (then the rest of your logic)
+        ...
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         print("Error in /fire-risk-summary:", e)
         return jsonify({"error": str(e)}), 500
