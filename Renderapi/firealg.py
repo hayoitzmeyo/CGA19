@@ -87,14 +87,26 @@ def getburnprobability(lat, lon):
         'returnGeometry': 'false',
         'f': 'json'
     }
-    response = requests.get(url, params=params)
-    data = response.json()
+    headers = {"User-Agent": "GeoRisk/1.0 (contact: your_email@example.com)"}
+
+    response = requests.get(url, params=params, headers=headers, timeout=20)
+    if response.status_code != 200:
+        print(f"BurnProb API returned status {response.status_code}: {response.text[:200]}")
+        return None
+
+    try:
+        data = response.json()
+    except ValueError:
+        print("BurnProb API invalid JSON:", response.text[:200])
+        return None
+
     value = data.get('value')
     try:
         if value is not None and value != "NoData":
             return float(value)
     except Exception:
         pass
+
     values = data.get('properties', {}).get('Values', [])
     for v in values:
         if v is not None and v != "NoData":
@@ -103,6 +115,7 @@ def getburnprobability(lat, lon):
             except Exception:
                 continue
     return None
+
 
 def normalizefirecount(firecount, radius_km=60, years=5, min_density=0, max_density=0.00049):
     area_km2 = math.pi * (radius_km ** 2)
