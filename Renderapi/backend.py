@@ -8,6 +8,8 @@ import io
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import lru_cache, wraps
+from math import radians, sin, cos, sqrt, atan2
+
 
 bp = Blueprint("backend", __name__)
 
@@ -89,35 +91,48 @@ def get_elevation(lat, lon):
 # -----------------------
 NOAA_TOKEN = "mZrOfwskAmScPKKmsBhejnjbSBVYunzO"
 
-def find_nearest_noaa_station(lat, lon, bbox_size=0.05):
-    """Return station id or None. bbox: lat_min,lon_min,lat_max,lon_max"""
-    station_url = "https://www.ncei.noaa.gov/cdo-web/api/v2/stations"
+def haversine(lat1, lon1, lat2, lon2):
+    R = 6371.0  # Earth radius in km
+    dlat = radians(lat2 - lat1)
+    dlon = radians(lon2 - lon1)
+    a = sin(dlat / 2) ** 2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon / 2) ** 2
+    c = 2 * atan2(sqrt(a), sqrt(1 - a))
+    return R * c
+
+def find_nearest_noaa_station(lat, lon):
+    url = (
+        f"https://www.ncei.noaa.gov/cdo-web/api/v2/stations"
+        f"?datasetid=GHCND&datatypeid=PRCP"
+        f"&extent={lat-0.05},{lon-0.05},{lat+0.05},{lon+0.05}"  # 0.1° box around point
+        f"&limit=50"
+    )
+
     headers = {"token": NOAA_TOKEN}
-    # bbox must be lat_min,lon_min,lat_max,lon_max
-    extent = f"{lat - bbox_size},{lon - bbox_size},{lat + bbox_size},{lon + bbox_size}"
-    params = {
-        "datasetid": "GHCND",
-        "datatypeid": "PRCP",
-        "extent": extent,
-        "limit": 5,
-        "sortfield": "distance",
-        "sortorder": "asc"
-    }
-    try:
-        resp = requests.get(station_url, headers=headers, params=params, timeout=10)
-        if resp.status_code >= 400:
-            # print server message for debugging
-            print(f"NOAA stations call {resp.status_code}: {resp.text[:512]}")
-            resp.raise_for_status()
-        data = resp.json()
-        results = data.get("results", []) if isinstance(data, dict) else []
-        if not results:
-            return None
-        # pick closest (first)
-        return results[0].get("id")
-    except Exception as e:
-        print(f"find_nearest_noaa_station error: {e}")
+    response = requests.get(url, headers=headers)
+
+    if not response.ok:
+        print(f"NOAA stations call {response.status_code}: {response.text}")
+        response.raise_for_status()
+
+    data = response.json()
+    if "results" not in data or not data["results"]:
+        print("No stations found near this coordinate.")
         return None
+
+    # Compute nearest manually
+    stations = data["results"]
+    nearest = min(
+        stations,
+        key=lambda s: haversine(lat, lon, s["latitude"], s["longitude"])
+    )
+
+    return {
+        "id": nearest["id"],
+        "name": nearest.get("name", "Unknown"),
+        "distance_km": round(haversine(lat, lon, nearest["latitude"], nearest["longitude"]), 2),
+        "latitude": nearest["latitude"],
+        "longitude": nearest["longitude"]
+    }
 
 def get_noaa_precip(lat, lon, startdate, enddate):
     """Return a precipitation value (or None)."""
@@ -154,33 +169,40 @@ def get_noaa_precip(lat, lon, startdate, enddate):
 # -----------------------
 FEMA_KEY = "ESKxETVHZm4pZXY6WH9UjkUhtDnAVT73TJXblPg8"
 
-def get_fema_flood_data(lat, lon, retries=2):
-    url = "https://api.nationalflooddata.com/v3/data"
-    headers = {"X-Api-Key": FEMA_KEY}
-    params = {"latitude": lat, "longitude": lon}
-    for attempt in range(retries + 1):
+import requests
+import time
+
+FEMA_API_URL = "https://api.nationalflooddata.com/v3/data"
+FEMA_KEY = "YOUR_FEMA_API_KEY"
+
+def get_fema_flood_data(lat, lon, retries=3):
+    """Fetch FEMA flood data with retry + backoff handling."""
+    for attempt in range(retries):
         try:
-            r = requests.get(url, headers=headers, params=params, timeout=10)
-            if r.status_code == 429 and attempt < retries:
-                wait = 2 ** attempt
+            response = requests.get(
+                FEMA_API_URL,
+                params={"latitude": lat, "longitude": lon},
+                headers={"x-api-key": FEMA_KEY},
+                timeout=15
+            )
+            
+            if response.status_code == 429:
+                wait = (2 ** attempt) + 1  # exponential backoff
                 print(f"Rate limited by FEMA, retrying in {wait}s...")
                 time.sleep(wait)
-                continue
-            r.raise_for_status()
-            try:
-                data = r.json()
-            except ValueError:
-                return {}
-            if isinstance(data, dict):
-                return {"zone": data.get("flood_zone"), "risk": data.get("flood_risk")}
-            return {}
-        except Exception as e:
+                continue  # retry
+                
+            response.raise_for_status()
+            data = response.json()
+            return data  # successful
+
+        except requests.exceptions.RequestException as e:
             print(f"FEMA flood API error: {e}")
-            if attempt < retries:
-                time.sleep(1)
-            else:
-                return {}
-    return {}
+            time.sleep(1)
+    
+    print("FEMA flood API failed after multiple retries.")
+    return None
+
 
 # -----------------------
 # Overpass / nearest waterbody (lightweight via requests)

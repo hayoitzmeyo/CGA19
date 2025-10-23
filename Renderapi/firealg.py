@@ -31,10 +31,10 @@ def get_coordinates(address):
         "limit": 1
     }
     headers = {
-        "User-Agent": "Georisk/1.0 (contact: Harnoor.Sethi27@bcp.org)"  # <-- MUST include contact
+        "User-Agent": "Georisk/1.0 (contact: Harnoor.Sethi27@bcp.org)" 
     }
 
-    response = requests.get(url, params=params, headers=headers, timeout=10)
+    response = requests.get(url, params=params, headers=headers, timeout=20)
     response.raise_for_status()  
     data = response.json()
     if not data:
