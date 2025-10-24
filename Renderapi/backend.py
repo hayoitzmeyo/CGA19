@@ -64,7 +64,7 @@ def get_coordinates(address):
         "limit": 1
     }
     headers = {
-        "User-Agent": "Georisk/1.0 (contact: Harnoor.Sethi27@bcp.org)"  # <-- MUST include contact
+        "User-Agent": "Georisk/1.0 (contact: Harnoor.Sethi27@bcp.org)"  
     }
 
     response = requests.get(url, params=params, headers=headers, timeout=10)
@@ -134,6 +134,7 @@ def find_nearest_noaa_station(lat, lon):
         "longitude": nearest["longitude"]
     }
 
+# ---------- NOAA station / precip fix ----------
 def get_noaa_precip(lat, lon, startdate, enddate):
     """Return a precipitation value (or None)."""
     # Step 1: find station (cached)
@@ -145,7 +146,8 @@ def get_noaa_precip(lat, lon, startdate, enddate):
     params = {
         "datasetid": "GHCND",
         "datatypeid": "PRCP",
-        "stationid": s,
+        # stationid must be a string like "GHCND:USW00023188"
+        "stationid": s.get("id"),
         "startdate": startdate,
         "enddate": enddate,
         "limit": 1,
@@ -164,6 +166,7 @@ def get_noaa_precip(lat, lon, startdate, enddate):
         print(f"NOAA fetch error: {e}")
         return None
 
+
 # -----------------------
 # FEMA flood with safe return
 # -----------------------
@@ -172,36 +175,83 @@ FEMA_KEY = "ESKxETVHZm4pZXY6WH9UjkUhtDnAVT73TJXblPg8"
 import requests
 import time
 
-FEMA_API_URL = "https://api.nationalflooddata.com/v3/data"
-FEMA_KEY = "YOUR_FEMA_API_KEY"
 
-def get_fema_flood_data(lat, lon, retries=3):
-    """Fetch FEMA flood data with retry + backoff handling."""
-    for attempt in range(retries):
-        try:
-            response = requests.get(
-                FEMA_API_URL,
-                params={"latitude": lat, "longitude": lon},
-                headers={"x-api-key": FEMA_KEY},
-                timeout=15
-            )
-            
-            if response.status_code == 429:
-                wait = (2 ** attempt) + 1  # exponential backoff
-                print(f"Rate limited by FEMA, retrying in {wait}s...")
-                time.sleep(wait)
-                continue  # retry
-                
-            response.raise_for_status()
-            data = response.json()
-            return data  # successful
+def get_fema_flood_data(lat, lon, layer_index=28, timeout=12):
+    """
+    Query FEMA NFHL ArcGIS service for flood risk zone at given coordinates.
+    Returns a dict: {"zone": <str or None>, "features": <raw features list or []>}
+    """
+    url = f"https://hazards.fema.gov/gis/nfhl/rest/services/public/NFHL/MapServer/{layer_index}/query"
+    params = {
+        'geometry': f"{lon},{lat}",         # ArcGIS uses lon,lat order
+        'geometryType': 'esriGeometryPoint',
+        'inSR': '4326',
+        'spatialRel': 'esriSpatialRelIntersects',
+        'outFields': 'FLD_ZONE',
+        'returnGeometry': 'false',
+        'f': 'json'
+    }
+    try:
+        resp = requests.get(url, params=params, timeout=timeout)
+        resp.raise_for_status()
+        data = resp.json()
+        features = data.get('features', []) or []
+        zone = None
+        if features:
+            # Prefer first non-empty FLD_ZONE
+            for feat in features:
+                attrs = feat.get("attributes") or {}
+                z = attrs.get("FLD_ZONE")
+                if z:
+                    zone = str(z).strip()
+                    break
+        return {"zone": zone, "features": features}
+    except Exception as e:
+        print(f"Error fetching FEMA zone: {e}")
+        return {"zone": None, "features": []}
 
-        except requests.exceptions.RequestException as e:
-            print(f"FEMA flood API error: {e}")
-            time.sleep(1)
-    
-    print("FEMA flood API failed after multiple retries.")
-    return None
+def normalize_fema_zone(zone):
+    """
+    Convert FEMA flood zone code into normalized 0–1 risk score.
+    Accepts things like 'AE', 'A', 'A99', 'VE', 'X', 'D', None.
+    """
+    if not zone:
+        return 0.2  # unknown / unmapped baseline
+
+    z = str(zone).upper().strip()
+
+    # map of canonical keys (longer prefixes first)
+    # values chosen to reflect relative flood risk (0..1)
+    mapping = {
+        "VE": 1.0,   # coastal high velocity
+        "V": 0.95,
+        "AE": 0.9,
+        "A": 0.8,
+        "AH": 0.75,
+        "AO": 0.72,
+        "AR": 0.6,
+        "A99": 0.55,
+        "D": 0.4,
+        "X": 0.2,
+        "B": 0.2,
+        "C": 0.2
+    }
+
+    # Try exact matches first
+    if z in mapping:
+        return mapping[z]
+
+    # Try prefix matches for special cases (A99, AE##, etc.)
+    # Check longer prefixes first
+    prefixes = sorted(mapping.keys(), key=len, reverse=True)
+    for p in prefixes:
+        if z.startswith(p):
+            return mapping[p]
+
+    # fallback
+    return 0.2
+
+
 
 
 # -----------------------
@@ -549,9 +599,7 @@ def approximate_distance_km(lat1, lon1, lat2, lon2):
     dy = delta_lat * km_per_deg_lat
     return math.sqrt(dx*dx + dy*dy)
 
-# -----------------------
-# Main route — parallelize independent calls
-# -----------------------
+
 @bp.route('/risk-summary', methods=['POST'])
 def risk_summary():
     try:
@@ -570,7 +618,7 @@ def risk_summary():
             futures = {
                 ex.submit(get_elevation, lat, lon): "elevation",
                 ex.submit(get_noaa_precip, lat, lon, "2024-10-01", "2025-09-11"): "noaa_precip",
-                ex.submit(get_fema_flood_data, lat, lon): "fema",
+                ex.submit(get_fema_flood_data, lat, lon): "fema_zone",  # ✅ new
                 ex.submit(get_closest_waterbody, lat, lon): "waterbody",
                 ex.submit(get_air_quality, lat, lon): "aqi",
                 ex.submit(get_lhasaRisk, lat, lon, 0.01): "lhasa"
@@ -607,20 +655,37 @@ def risk_summary():
             print(f"earthquake_risk error: {e}")
             earthquake_risk = 0.0
 
-        # Fault distance approximated was not in parallel to avoid double USGS calls,
-        # but we can get it if not computed inside earthquake risk
         try:
             fault_dis = get_faultDis(lat, lon)
         except Exception as e:
             print(f"fault_dis error: {e}")
             fault_dis = 0.0
 
+              # after the parallel futures complete:
         elevation = results.get("elevation")
         noaa_precip = results.get("noaa_precip")
-        fema_data = results.get("fema") or {}
+        fema_result = results.get("fema_zone")   # this should be the dict returned by get_fema_flood_data
         waterbody = results.get("waterbody")
         aqi = results.get("aqi", "Unknown")
         landslide_risk = results.get("lhasa", 0.0)
+
+        # extract zone string robustly
+        fema_zone = None
+        if isinstance(fema_result, dict):
+            fema_zone = fema_result.get("zone")
+        elif isinstance(fema_result, str):
+            fema_zone = fema_result
+        else:
+            fema_zone = None
+
+        # normalize
+        norm_fema = normalize_fema_zone(fema_zone)
+
+        # distance normalization (default if not found)
+        if isinstance(waterbody, (int, float)):
+            dist_km = float(waterbody)
+        else:
+            dist_km = 8.5
 
         def clamp(v, lo=0, hi=1):
             try:
@@ -628,23 +693,11 @@ def risk_summary():
             except:
                 return 0.0
 
+        norm_dist = clamp(1 - (float(dist_km) / 10.0))
         norm_elevation = clamp(1 - (float(elevation or 0) / 500.0))
         norm_precip = clamp((float(noaa_precip or 0) / 2000.0))
 
-        fema_zone = fema_data.get("zone") if isinstance(fema_data, dict) else None
-        zone_weights = {
-            "V": 1.0, "VE": 1.0, "A": 0.8, "AE": 0.9,
-            "AO": 0.7, "AH": 0.7, "X": 0.3, "D": 0.4
-        }
-        norm_fema = zone_weights.get(str(fema_zone).upper()[:2], 0.2)
-
-        if isinstance(waterbody, (int, float)):
-            dist_km = float(waterbody)
-        else:
-            dist_km = 10.0
-
-        norm_dist = clamp(1 - (float(dist_km) / 10.0))
-
+        # Weighted flood risk components
         elev_w, precip_w, fema_w, dist_w = 0.35, 0.25, 0.30, 0.10
         flood_risk = (
             (norm_elevation * elev_w)
@@ -652,6 +705,8 @@ def risk_summary():
             + (norm_fema * fema_w)
             + (norm_dist * dist_w)
         )
+
+
 
         return jsonify({
             "success": True,
@@ -666,7 +721,8 @@ def risk_summary():
             "riskCategory": risk_category,
             "elevation_m": elevation,
             "noaa_precip_mm": noaa_precip,
-            "fema_flood_zone": fema_data,
+            "fema_flood_zone": fema_zone,               # simple canonical string
+            "fema_flood_raw": fema_result,             # full dict with 'features' for debugging
             "nearestWaterbody_km": dist_km,
             "normalizedElevation": norm_elevation,
             "normalizedPrecipitation": norm_precip,
@@ -674,6 +730,7 @@ def risk_summary():
             "normalizedDistanceToWater": norm_dist,
             "floodRisk": round(float(flood_risk), 3)
         })
+
 
     except Exception as e:
         print(f"Error in /risk-summary: {e}")

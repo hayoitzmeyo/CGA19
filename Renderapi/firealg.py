@@ -13,7 +13,7 @@ def latlontowebmercator(lat, lon):
     return x, y
 
 def safe_get_json(url, params=None, headers=None, retries=3, backoff=2):
-    headers = headers or {"User-Agent": "GeoRisk/1.0 (contact: your_email@example.com)"}
+    headers = headers or {"User-Agent": "GeoRisk/1.0 (contact: Harnoor.Sethi27@bcp.org)"}
     for attempt in range(1, retries+1):
         try:
             resp = requests.get(url, params=params, headers=headers, timeout=20)
@@ -60,7 +60,6 @@ def normalizefirecount(firecount, radius_km=60, years=5, min_density=0, max_dens
     normalized = max(0, min(normalized, 1))
     return normalized
 
-# ----------------- API Helpers -----------------
 def get_coordinates(address):
     url = "https://nominatim.openstreetmap.org/search"
     params = {"q": address, "format": "json", "limit": 1}
@@ -191,7 +190,6 @@ def getsuppressiondifficulty(lat, lon, radiuskm=60):
             pass
     return None
 
-# ----------------- Flask Route -----------------
 @bp.route('/fire-risk-summary', methods=['POST'])
 def fire_risk_summary():
     try:
