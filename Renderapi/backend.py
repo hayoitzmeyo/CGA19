@@ -171,42 +171,49 @@ def get_noaa_precip(lat, lon, startdate, enddate):
 FEMA_KEY = "ESKxETVHZm4pZXY6WH9UjkUhtDnAVT73TJXblPg8"
 
 import requests
-import time
+import json
 
-
-def get_fema_flood_data(lat, lon, layer_index=0, timeout=12):
+def get_fema_flood_data(lat, lon):
     """
-    Query FEMA NFHL ArcGIS service for flood risk zone at given coordinates.
-    Returns a dict: {"zone": <str or None>, "features": <raw features list or []>}
+    Fetch FEMA flood zone information for a given latitude and longitude.
+    Returns a dictionary with the flood zone or 'Unknown' if not found.
     """
-    url = f"https://hazards.fema.gov/gis/nfhl/rest/services/public/NFHL/MapServer/{layer_index}/query"
+    url = "https://hazards.fema.gov/gis/nfhl/rest/services/public/NFHL/MapServer/0/query"
+    
+    # Correct geometry format for NFHL service
     params = {
-        'geometry': f"{lon},{lat}",         # ArcGIS uses lon,lat order
-        'geometryType': 'esriGeometryPoint',
-        'inSR': '4326',
-        'spatialRel': 'esriSpatialRelIntersects',
-        'outFields': 'FLD_ZONE',
-        'returnGeometry': 'false',
-        'f': 'json'
+        "geometry": json.dumps({"x": lon, "y": lat}),
+        "geometryType": "esriGeometryPoint",
+        "inSR": 4326,
+        "spatialRel": "esriSpatialRelIntersects",
+        "outFields": "FLD_ZONE",
+        "returnGeometry": "false",
+        "f": "json"
     }
+    
     try:
-        resp = requests.get(url, params=params, timeout=timeout)
-        resp.raise_for_status()
-        data = resp.json()
-        features = data.get('features', []) or []
-        zone = None
-        if features:
-            # Prefer first non-empty FLD_ZONE
-            for feat in features:
-                attrs = feat.get("attributes") or {}
-                z = attrs.get("FLD_ZONE")
-                if z:
-                    zone = str(z).strip()
-                    break
-        return {"zone": zone, "features": features}
-    except Exception as e:
-        print(f"Error fetching FEMA zone: {e}")
-        return {"zone": None, "features": []}
+        response = requests.get(url, params=params, timeout=10)
+        response.raise_for_status()  # Raises HTTPError for 4xx/5xx
+        data = response.json()
+        
+        # Check if any features returned
+        if "features" in data and len(data["features"]) > 0:
+            fld_zone = data["features"][0]["attributes"].get("FLD_ZONE", "Unknown")
+            return {"fema_flood_zone": fld_zone}
+        else:
+            return {"fema_flood_zone": "Unknown"}
+    
+    except requests.exceptions.HTTPError as e:
+        # Specific handling for 404 or other HTTP errors
+        if response.status_code == 404:
+            return {"fema_flood_zone": "Not Found"}
+        else:
+            return {"fema_flood_zone": "Error"}
+    
+    except requests.exceptions.RequestException as e:
+        # Network errors, timeouts, etc.
+        return {"fema_flood_zone": "Error"}
+
 
 def normalize_fema_zone(zone):
     """
@@ -668,13 +675,15 @@ def risk_summary():
         landslide_risk = results.get("lhasa", 0.0)
 
         # extract zone string robustly
+     # extract zone string robustly
         fema_zone = None
         if isinstance(fema_result, dict):
-            fema_zone = fema_result.get("zone")
+            fema_zone = fema_result.get("fema_flood_zone")  # ✅ correct key
         elif isinstance(fema_result, str):
             fema_zone = fema_result
         else:
             fema_zone = None
+
 
         # normalize
         norm_fema = normalize_fema_zone(fema_zone)
