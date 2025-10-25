@@ -379,7 +379,26 @@
 			  list.innerHTML = recs.map(r => `<li>${r}</li>`).join("");
 			});
 			</script>
-			
+			<script>
+				window.addEventListener('DOMContentLoaded', function() {
+					const d1 = JSON.parse(localStorage.getItem('georisk_results_data1') || 'null');
+					if (!d1) return;
+				
+					// Fill in the flood parameter placeholders
+					document.getElementById('flood-param-elevation').textContent =
+						(d1.elevationMeters !== undefined ? d1.elevationMeters.toFixed(1) : 'N/A');
+				
+					document.getElementById('flood-param-zone').textContent =
+						d1.floodZone || 'N/A';
+				
+					document.getElementById('flood-param-precip').textContent =
+						(d1.avgAnnualPrecipitation !== undefined ? d1.avgAnnualPrecipitation.toFixed(1) : 'N/A');
+				
+					document.getElementById('flood-param-dist').textContent =
+						(d1.distanceToRiverKm !== undefined ? d1.distanceToRiverKm.toFixed(2) : 'N/A');
+				});
+				</script>
+				
 			
 		
 <body>
