@@ -59,15 +59,21 @@ def normalizefirecount(firecount, radius_km=60, years=5, min_density=0, max_dens
     normalized = (annual_density - min_density) / (max_density - min_density)
     normalized = max(0, min(normalized, 1))
     return normalized
-
 def get_coordinates(address):
-    url = "https://nominatim.openstreetmap.org/search"
-    params = {"q": address, "format": "json", "limit": 1}
-    headers = {"User-Agent": "GeoRisk/1.0 (contact: your_email@example.com)"}
-    data = safe_get_json(url, params=params, headers=headers)
-    if not data:
-        return None
-    return float(data[0]["lat"]), float(data[0]["lon"])
+    for attempt in range(3):
+        try:
+            url = f"https://geocode.maps.co/search?q={address}&format=json&limit=1"
+            headers = {"User-Agent": "Georisk/1.0 (contact: Harnoor.Sethi27@bcp.org)"}
+            response = requests.get(url, headers=headers, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            if not data:
+                return None
+            return float(data[0]["lat"]), float(data[0]["lon"])
+        except Exception as e:
+            print(f"Attempt {attempt+1}: Request failed: {e}")
+            time.sleep(1)
+    return None
 
 def gethousingunitrisk(lat, lon):
     url = "https://apps.fs.usda.gov/fsgisx01/rest/services/RDW_Wildfire/RMRS_WRC_HousingUnitRisk/ImageServer/identify"

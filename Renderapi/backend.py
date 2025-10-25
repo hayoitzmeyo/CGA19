@@ -56,23 +56,21 @@ def safe_api_get(url, params=None, headers=None, method="get", json_body=None, t
 # Geocoding + misc
 # -----------------------
 def get_coordinates(address):
-    import requests
-    url = "https://nominatim.openstreetmap.org/search"
-    params = {
-        "q": address,
-        "format": "json",
-        "limit": 1
-    }
-    headers = {
-        "User-Agent": "Georisk/1.0 (contact: Harnoor.Sethi27@bcp.org)"  
-    }
+    for attempt in range(3):
+        try:
+            url = f"https://geocode.maps.co/search?q={address}&format=json&limit=1"
+            headers = {"User-Agent": "Georisk/1.0 (contact: Harnoor.Sethi27@bcp.org)"}
+            response = requests.get(url, headers=headers, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            if not data:
+                return None
+            return float(data[0]["lat"]), float(data[0]["lon"])
+        except Exception as e:
+            print(f"Attempt {attempt+1}: Request failed: {e}")
+            time.sleep(1)
+    return None
 
-    response = requests.get(url, params=params, headers=headers, timeout=10)
-    response.raise_for_status()  
-    data = response.json()
-    if not data:
-        return None
-    return float(data[0]["lat"]), float(data[0]["lon"])
 
 def get_elevation(lat, lon):
     try:
