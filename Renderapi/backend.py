@@ -174,7 +174,7 @@ import requests
 import time
 
 
-def get_fema_flood_data(lat, lon, layer_index=28, timeout=12):
+def get_fema_flood_data(lat, lon, layer_index=0, timeout=12):
     """
     Query FEMA NFHL ArcGIS service for flood risk zone at given coordinates.
     Returns a dict: {"zone": <str or None>, "features": <raw features list or []>}

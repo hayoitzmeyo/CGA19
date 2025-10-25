@@ -491,30 +491,29 @@
 								</div>
 							</div>
 						</div>
-						<div class="card">
-							<div class="card-header" role="tab" id="headingFlood">
-							  <a role="button" class="panel-title collapsed" data-toggle="collapse" data-bs-toggle="collapse" href="#collapseFlood" aria-expanded="false" aria-controls="collapseFlood">
-								<h6 class="panel-title-edit mbr-semibold mbr-fonts-style mb-0 display-5">
-								  Flood Risk Probability:
-								  <span id="flood-risk-level" style="color:#007bff;"></span>
-								</h6>
-								<span class="sign mbr-iconfont mobi-mbri-arrow-down"></span>
-							  </a>
-							</div>
-							<div id="collapseFlood" class="panel-collapse noScroll collapse" role="tabpanel" aria-labelledby="headingFlood" data-parent="#accordion" data-bs-parent="#bootstrap-accordion_3">
-							  <div class="panel-body">
-								<div class="mbr-fonts-style panel-text display-7" id="flood-risk-details">Loading flood analysis...</div>
-								<div style="margin-top: 12px;">
-								  <span class="price mbr-fonts-style display-7">
-									Risk Score: <span id="flood-risk-score"></span>
-								  </span>
-								  <div id="flood-score-context" class="mbr-fonts-style display-7" style="margin-top:6px;"></div>
-								</div>
-								<h6 style="margin-top:16px;"><b>Recommendations:</b></h6>
-								<ul id="flood-rec-list" class="mbr-fonts-style display-7"></ul>
-							  </div>
-							</div>
-						  </div>
+						<div class="card"> <div class="card-header" role="tab" id="headingFlood"> <a role="button" class="panel-title collapsed" data-toggle="collapse" data-bs-toggle="collapse" href="#collapseFlood" aria-expanded="false" aria-controls="collapseFlood"> <h6 class="panel-title-edit mbr-semibold mbr-fonts-style mb-0 display-5"> Flood Risk Probability: <span id="flood-risk-level" style="color:#007bff;"></span> </h6> <span class="sign mbr-iconfont mobi-mbri-arrow-down"></span> </a> </div> <div id="collapseFlood" class="panel-collapse noScroll collapse" role="tabpanel" aria-labelledby="headingFlood" data-parent="#accordion" data-bs-parent="#bootstrap-accordion_3"> <div class="panel-body"> <!-- Flood risk descriptive summary --> <div class="mbr-fonts-style panel-text display-7" id="flood-risk-details"> Loading flood analysis... </div>
+						  <!-- Numerical score and context -->
+  <div style="margin-top: 12px;">
+    <span class="price mbr-fonts-style display-7">
+      Risk Score: <span id="flood-risk-score"></span>
+    </span>
+    <div id="flood-score-context" class="mbr-fonts-style display-7" style="margin-top:6px;"></div>
+  </div>
+
+  <!-- Parameters used -->
+  <h6 style="margin-top:16px;"><b>Parameters Used:</b></h6>
+  <ul class="mbr-fonts-style display-7" style="margin-bottom:12px;">
+    <li>Elevation (meters): <span id="flood-param-elevation">Loading...</span></li>
+    <li>FEMA Flood Zone: <span id="flood-param-zone">Loading...</span></li>
+    <li>Average Precipitation (mm): <span id="flood-param-precip">Loading...</span></li>
+    <li>Distance to Nearest River (km): <span id="flood-param-dist">Loading...</span></li>
+  </ul>
+
+  <!-- Recommendations -->
+  <h6><b>Recommendations:</b></h6>
+  <ul id="flood-rec-list" class="mbr-fonts-style display-7"></ul>
+</div>
+
 						  
 						<div class="card">
 							<div class="card-header" role="tab" id="headingWildfire">
