@@ -229,55 +229,85 @@
 			});
 			</script>
 	<script>
-		function getRiskLevelFlood(level) {
-		  if (level === "Low")
-			return "Low flood risk: Historical and topographic models suggest limited inundation potential. Maintain good drainage and monitor local alerts during storms.";
-		  if (level === "Medium")
-			return "Medium flood risk: Nearby water bodies or drainage patterns may cause moderate flooding in heavy rain. Consider sandbags, sump pumps, and flood insurance.";
-		  if (level === "High")
-			return "High flood risk: Property lies within or near a mapped floodplain or low-lying area. Prepare flood barriers, elevate valuables, and have an evacuation plan.";
-		  return "No explanation available.";
-		}
-		
-		function floodNittyGrittyAnalysis(d1) {
-		  let html = `<p><strong>Model Details:</strong></p><ul>`;
-		  if ('floodRisk' in d1) html += `<li><b>Normalized Flood Risk Score:</b> ${d1.floodRisk}</li>`;
-		  if ('floodZone' in d1) html += `<li><b>FEMA Flood Zone:</b> ${d1.floodZone}</li>`;
-		  if ('rainfallIndex' in d1) html += `<li><b>Recent Rainfall Index:</b> ${d1.rainfallIndex}</li>`;
-		  if ('drainageScore' in d1) html += `<li><b>Drainage Efficiency Score:</b> ${d1.drainageScore}</li>`;
-		  html += `</ul>`;
-		  html += `<p><em>Flood risk is estimated from historical FEMA flood maps, rainfall indices, and terrain drainage capacity.</em></p>`;
-		  return html;
-		}
-		
-		window.addEventListener('DOMContentLoaded', function () {
+		window.addEventListener('DOMContentLoaded', function() {
 		  const d1 = JSON.parse(localStorage.getItem('georisk_results_data1') || 'null');
 		  if (!d1) return;
 		
-		  // Parse score
-		  let floodScore = (typeof d1.floodRisk === "number") ? d1.floodRisk : Number(d1.floodRisk);
-		  if (isNaN(floodScore)) floodScore = null;
-		
-		  const level = getRiskLevel(floodScore);
-		  const levelSpan = document.getElementById('flood-risk-level');
-		  if (levelSpan) levelSpan.textContent = level;
-		
-		  const details = floodNittyGrittyAnalysis(d1) +
-			`<p style="margin-top:12px;"><strong>What this means:</strong> ${getRiskLevelFlood(level)}</p>`;
-		  const detailsDiv = document.getElementById('flood-risk-details');
-		  if (detailsDiv) detailsDiv.innerHTML = details;
-		
-		  const scoreEl = document.getElementById('flood-risk-score');
-		  if (scoreEl) scoreEl.textContent = (floodScore !== null ? floodScore.toFixed(2) : 'N/A');
-		
-		  const contextEl = document.getElementById('flood-score-context');
-		  if (contextEl) {
-			contextEl.innerHTML = `<small>Your score is on a 0–1 scale. "${level}" means a score ${
-			  level === "Low" ? "under 0.33" : level === "Medium" ? "between 0.33 and 0.66" : "over 0.66"
-			}.</small>`;
+		  function getRiskLevel(score) {
+			if (score === null || isNaN(score)) return "N/A";
+			if (score < 0.33) return "Low";
+			if (score < 0.66) return "Medium";
+			return "High";
 		  }
+		
+		  function getRiskLevelFlood(level) {
+			switch(level) {
+			  case "Low": return "Low chance of significant flooding.";
+			  case "Medium": return "Moderate chance of flooding; take precautions.";
+			  case "High": return "High chance of flooding; serious risk.";
+			  default: return "No data available.";
+			}
+		  }
+		
+		  function floodNittyGrittyAnalysis(d1) {
+			const elevation = d1.elevation_m ?? "N/A";
+			const precipitation = d1.noaa_precip_mm ?? "N/A";
+			const femaZone = d1.fema_flood_zone ?? "N/A";
+			const distanceToWater = d1.nearestWaterbody_km ?? "N/A";
+		
+			const normalizedElevation = d1.normalizedElevation ?? "N/A";
+			const normalizedPrecipitation = d1.normalizedPrecipitation ?? "N/A";
+			const normalizedFEMAZone = d1.normalizedFEMAZone ?? "N/A";
+			const normalizedDistanceToWater = d1.normalizedDistanceToWater ?? "N/A";
+		
+			return `
+			  <p><strong>Elevation:</strong> ${elevation} m (normalized: ${normalizedElevation})</p>
+			  <p><strong>Precipitation:</strong> ${precipitation} mm (normalized: ${normalizedPrecipitation})</p>
+			  <p><strong>FEMA flood zone:</strong> ${femaZone} (normalized: ${normalizedFEMAZone})</p>
+			  <p><strong>Distance to nearest waterbody:</strong> ${distanceToWater} km (normalized: ${normalizedDistanceToWater})</p>
+			`;
+		  }
+		
+		  function personalizedFloodRecommendations(d1) {
+			const recs = [];
+			const score = Number(d1.floodRisk) || 0;
+			const zone = (d1.fema_flood_zone || "").toUpperCase();
+		
+			if (score > 0.66 || ["A","AE","AH","AO","VE","V"].includes(zone)) {
+			  recs.push("High flood exposure: Elevate utilities, install flood vents, purchase flood insurance.");
+			} else if (score > 0.33) {
+			  recs.push("Medium flood risk: Inspect drainage, keep gutters clear, consider check valves.");
+			} else {
+			  recs.push("Low flood risk: Continue regular maintenance and stay alert during storms.");
+			}
+		
+			if ((Number(d1.drainageScore) || 0) < 0.4) recs.push("Low drainage efficiency: Regrade or add French drains.");
+			if ((Number(d1.rainfallIndex) || 0) > 0.7) recs.push("Heavy rainfall trends: Verify flood insurance and prepare emergency kits.");
+		
+			return recs.length ? recs : ["No additional recommendations found."];
+		  }
+		
+		  const floodScore = Number(d1.floodRisk) || 0;
+		  const level = getRiskLevel(floodScore);
+		
+		  document.getElementById('flood-risk-level').textContent = level;
+		  document.getElementById('flood-risk-score').textContent = floodScore.toFixed(3);
+		  document.getElementById('flood-score-context').innerHTML = `<small>Your score is on a 0–1 scale. "${level}" means a score ${
+			level==="Low"?"under 0.33":level==="Medium"?"between 0.33 and 0.66":"over 0.66"
+		  }.</small>`;
+		
+		  document.getElementById('flood-risk-details').innerHTML = floodNittyGrittyAnalysis(d1);
+		
+		  const recList = document.getElementById('flood-rec-list');
+		  recList.innerHTML = personalizedFloodRecommendations(d1).map(r=>`<li>${r}</li>`).join("");
+		
+		  document.getElementById('flood-param-elevation').textContent = d1.elevation_m ?? 'N/A';
+		  document.getElementById('flood-param-zone').textContent = d1.fema_flood_zone ?? 'N/A';
+		  document.getElementById('flood-param-precip').textContent = d1.noaa_precip_mm ?? 'N/A';
+		  document.getElementById('flood-param-dist').textContent = d1.nearestWaterbody_km ?? 'N/A';
 		});
 		</script>
+		
 		
 	<script>
 		function personalizedFireRecommendations(data2) {
@@ -514,41 +544,35 @@
 							<div class="card-header" role="tab" id="headingFlood">
 							  <a role="button" class="panel-title collapsed" data-toggle="collapse" data-bs-toggle="collapse" href="#collapseFlood" aria-expanded="false" aria-controls="collapseFlood">
 								<h6 class="panel-title-edit mbr-semibold mbr-fonts-style mb-0 display-5">
-								  Flood Risk Probability:
-								  <span id="flood-risk-level" style="color:#007bff;"></span>
+								  Flood Risk Probability: <span id="flood-risk-level" style="color:#007bff;"></span>
 								</h6>
 								<span class="sign mbr-iconfont mobi-mbri-arrow-down"></span>
 							  </a>
 							</div>
 							<div id="collapseFlood" class="panel-collapse noScroll collapse" role="tabpanel" aria-labelledby="headingFlood" data-parent="#accordion" data-bs-parent="#bootstrap-accordion_3">
 							  <div class="panel-body">
-								  <!-- Flood risk descriptive summary -->
 								<div class="mbr-fonts-style panel-text display-7" id="flood-risk-details">
-									Loading flood analysis...
+								  Loading flood analysis...
 								</div>
-
-								<!-- Numerical score and context -->
+						  
 								<div style="margin-top: 12px;">
-									<span class="price mbr-fonts-style display-7">
+								  <span class="price mbr-fonts-style display-7">
 									Risk Score: <span id="flood-risk-score"></span>
-									</span>
-									<div id="flood-score-context" class="mbr-fonts-style display-7" style="margin-top:6px;"></div>
+								  </span>
+								  <div id="flood-score-context" class="mbr-fonts-style display-7" style="margin-top:6px;"></div>
 								</div>
-
-								<!-- Parameters used -->
+						  
 								<h6 class="mbr-fonts-style display-7" style="margin-top:16px;"><b>Parameters Used:</b></h6>
 								<ul class="mbr-fonts-style display-7" style="margin-bottom:12px;">
-									<li>Elevation (meters): <span id="flood-param-elevation">Loading...</span></li>
-									<li>FEMA Flood Zone: <span id="flood-param-zone">Loading...</span></li>
-									<li>Average Annual Precipitation (mm): <span id="flood-param-precip">Loading...</span></li>
-									<li>Distance to Nearest River (km): <span id="flood-param-dist">Loading...</span></li>
+								  <li>Elevation (meters): <span id="flood-param-elevation">Loading...</span></li>
+								  <li>FEMA Flood Zone: <span id="flood-param-zone">Loading...</span></li>
+								  <li>Average Annual Precipitation (mm): <span id="flood-param-precip">Loading...</span></li>
+								  <li>Distance to Nearest River (km): <span id="flood-param-dist">Loading...</span></li>
 								</ul>
-
-								<!-- Recommendations -->
+						  
 								<h6 class="mbr-fonts-style display-7"><b>Recommendations:</b></h6>
 								<ul id="flood-rec-list" class="mbr-fonts-style display-7"></ul>
-
-								</div>
+							  </div>
 							</div>
 						  </div>
 						  
