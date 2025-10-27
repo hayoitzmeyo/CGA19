@@ -228,6 +228,35 @@
 			  }
 			});
 			</script>
+	
+	<script>
+		window.addEventListener('DOMContentLoaded', function() {
+  const d1 = JSON.parse(localStorage.getItem('georisk_results_data1') || 'null');
+  if (!d1) return;
+
+  const landslideScore = Number(d1.landslideRisk) || 0;
+  const level = getRiskLevelLandslide(landslideScore);
+
+  const valueEl = document.getElementById('landslide-risk-value');
+  if (valueEl) valueEl.textContent = landslideScore.toFixed(3);
+
+  const levelEl = document.getElementById('landslide-risk-level');
+  if (levelEl) levelEl.textContent = level;
+
+  const detailsEl = document.getElementById('landslide-risk-details');
+  if (detailsEl) detailsEl.innerHTML = landslideNittyGrittyAnalysis(d1);
+
+  const recList = document.getElementById('landslide-rec-list');
+  if (recList) {
+    const recs = [];
+    if (landslideScore > 0.66) recs.push("High landslide risk: avoid construction on steep slopes, improve drainage upslope.");
+    else if (landslideScore > 0.33) recs.push("Medium risk: monitor slope stability and soil saturation.");
+    else recs.push("Low risk: normal monitoring and maintenance recommended.");
+    recList.innerHTML = recs.map(r=>`<li>${r}</li>`).join("");
+  }
+});
+
+	</script>
 	<script>
 		window.addEventListener('DOMContentLoaded', function() {
 		  const d1 = JSON.parse(localStorage.getItem('georisk_results_data1') || 'null');
@@ -239,6 +268,23 @@
 			if (score < 0.66) return "Medium";
 			return "High";
 		  }
+		  function getRiskLevelLandslide(score) {
+			if (score === null || isNaN(score)) return "N/A";
+			if (score < 0.33) return "Low";
+			if (score < 0.66) return "Medium";
+			return "High";
+			}
+
+			function landslideNittyGrittyAnalysis(d1) {
+			return `
+				<p><strong>Slope:</strong> ${d1.slope ?? "N/A"}°</p>
+				<p><strong>Soil Type:</strong> ${d1.soilType ?? "N/A"}</p>
+				<p><strong>Annual Precipitation:</strong> ${d1.precipitation ?? "N/A"} mm</p>
+				<p><strong>Landslide Risk Score:</strong> ${d1.landslideRisk ?? "N/A"}</p>
+				<p><em>Landslide risk is computed based on slope, soil type, and precipitation trends.</em></p>
+			`;
+			}
+
 		
 		  function getRiskLevelFlood(level) {
 			switch(level) {
@@ -544,7 +590,7 @@
 							<div class="card-header" role="tab" id="headingFlood">
 							  <a role="button" class="panel-title collapsed" data-toggle="collapse" data-bs-toggle="collapse" href="#collapseFlood" aria-expanded="false" aria-controls="collapseFlood">
 								<h6 class="panel-title-edit mbr-semibold mbr-fonts-style mb-0 display-5">
-								  Flood Risk Probability: <span id="flood-risk-level" style="color:#007bff;"></span>
+								  Flood Risk Probability: <span id="flood-risk-level" style="color:#c9302c;"></span>
 								</h6>
 								<span class="sign mbr-iconfont mobi-mbri-arrow-down"></span>
 							  </a>
@@ -561,13 +607,6 @@
 								  </span>
 								  <div id="flood-score-context" class="mbr-fonts-style display-7" style="margin-top:6px;"></div>
 								</div>
-						  
-								<h6 class="mbr-fonts-style display-7" style="margin-top:16px;"><b>Parameters Used:</b></h6>
-								<ul class="mbr-fonts-style display-7" style="margin-bottom:12px;">
-								  <li>Elevation (meters): <span id="flood-param-elevation">Loading...</span></li>
-								  <li>FEMA Flood Zone: <span id="flood-param-zone">Loading...</span></li>
-								  <li>Average Annual Precipitation (mm): <span id="flood-param-precip">Loading...</span></li>
-								  <li>Distance to Nearest River (km): <span id="flood-param-dist">Loading...</span></li>
 								</ul>
 						  
 								<h6 class="mbr-fonts-style display-7"><b>Recommendations:</b></h6>
@@ -602,25 +641,34 @@
 							  </div>
 							</div>
 						  </div>						  
-						<div class="card">
-							<div class="card-header" role="tab" id="headingOne">
-								<a role="button" class="panel-title collapsed" data-toggle="collapse" data-bs-toggle="collapse" data-core="" href="#collapse4_3" aria-expanded="false" aria-controls="collapse4">
-									<h6 class="panel-title-edit mbr-semibold mbr-fonts-style mb-0 display-5">Landslide Risk Probability</h6>
-									<span class="sign mbr-iconfont mobi-mbri-arrow-down"></span>
-								</a>
+						  <div class="card">
+							<div class="card-header" role="tab" id="headingLandslide">
+							  <a role="button" class="panel-title collapsed" data-toggle="collapse" data-bs-toggle="collapse" href="#collapseLandslide" aria-expanded="false" aria-controls="collapseLandslide">
+								<h6 class="panel-title-edit mbr-semibold mbr-fonts-style mb-0 display-5">
+								  Landslide Risk Probability: <span id="landslide-risk-level" style="color:#c9302c;"></span>
+								</h6>
+								<span class="sign mbr-iconfont mobi-mbri-arrow-down"></span>
+							  </a>
 							</div>
-							<div id="collapse4_3" class="panel-collapse noScroll collapse" role="tabpanel" aria-labelledby="headingOne" data-parent="#accordion" data-bs-parent="#bootstrap-accordion_3">
-								<div class="panel-body">
-									<p class="mbr-fonts-style panel-text display-7">
-										Lorem ipsum dolor sit amet, consectetur adipiscing elit. Fusce vestibulum
-										laoreet tincidunt. Proin et sapien scelerisque, ornare lectus eget, iaculis
-										lectus. Pellentesque viverra molestie tortor. Nunc sed interdum est, in maximus
-										diam. Donec eu tellus dictum, gravida velit et, sagittis arcu. Proin et lectus
-										dapibus. Cras fringilla elit velit placerat tortor mollis cursus.
-									</p>
+							<div id="collapseLandslide" class="panel-collapse noScroll collapse" role="tabpanel" aria-labelledby="headingLandslide" data-parent="#accordion" data-bs-parent="#bootstrap-accordion_3">
+							  <div class="panel-body">
+								<div class="mbr-fonts-style panel-text display-7" id="landslide-risk-details">
+								  Loading landslide analysis...
 								</div>
+						  
+								<div style="margin-top: 12px;">
+								  <span class="price mbr-fonts-style display-7">
+									Risk Score: <span id="landslide-risk-score"></span>
+								  </span>
+								  <div id="landslide-score-context" class="mbr-fonts-style display-7" style="margin-top:6px;"></div>
+								</div>
+						  
+								<h6 class="mbr-fonts-style display-7"><b>Recommendations:</b></h6>
+								<ul id="landslide-rec-list" class="mbr-fonts-style display-7"></ul>
+							  </div>
 							</div>
-						</div>
+						  </div>
+						  
 						<div class="card">
 							<div class="card-header" role="tab" id="headingEarthquake">
 							  <a role="button" class="panel-title collapsed" data-toggle="collapse" data-bs-toggle="collapse" href="#collapseEarthquake" aria-expanded="false" aria-controls="collapseEarthquake">

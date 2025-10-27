@@ -132,6 +132,8 @@ def find_nearest_noaa_station(lat, lon):
         "longitude": nearest["longitude"]
     }
 
+
+
 # ---------- NOAA station / precip fix ----------
 def get_noaa_precip(lat, lon, startdate, enddate):
     """Return a precipitation value (or None)."""
@@ -496,6 +498,38 @@ def get_buildingType_cached(lat_r, lon_r, length):
         print(f"Error getting building type (overpass): {e}")
         return None
 
+
+def clamp(x, min_val=0.0, max_val=1.0):
+    return max(min(x, max_val), min_val)
+
+def calculate_combined_landslide_score(data):
+    """
+    Combines landslide_risk, landslide_fema_score, elevation_m, and nearestWaterbody_km
+    into one normalized 0–1 landslide risk value.
+    """
+
+    # --- Normalize each factor ---
+    # LHASA landslide risk (already 0–1)
+    lhasa = clamp(data.get("landslide_risk", 0))
+
+    # FEMA landslide score (expected 0–1)
+    fema = clamp(data.get("landslide_fema_score", 0))
+
+    # Elevation proxy: higher = steeper terrain
+    norm_elev = clamp(1 - math.exp(-data.get("elevation_m", 0) / 800.0))
+
+    # Distance to nearest waterbody: closer = more erosion/saturation
+    norm_water = clamp(1 - (data.get("nearestWaterbody_km", 10) / 10.0))
+
+    # --- Weighted combination ---
+    combined = (
+        0.45 * lhasa +   # core landslide susceptibility
+        0.25 * fema +    # FEMA soil/hazard component
+        0.20 * norm_elev + 
+        0.10 * norm_water
+    )
+
+    return clamp(combined)
 def get_buildingType(lat, lon, length):
     # use rounding and cached function to avoid repeated network calls for near-identical coords
     lat_r, lon_r = round_coords(lat, lon, ndigits=4)
@@ -528,9 +562,35 @@ def get_riskCategory(lat, lon):
         print(f"Error determining risk category: {e}")
         return "I"
 
-# -----------------------
-# Landslide / NASA (unchanged)
-# -----------------------
+
+
+def get_landslide_risk_score(lat, lon):
+    # Compose WKT string for the point
+    wkt_str = f"POINT({lon} {lat})"
+    # FEMA/LightBox endpoint for geometry-based risk index query
+    url = "https://api.lightboxre.com/v1/riskindexes/us/geometry"
+    # Set up params
+    params = {
+        "wkt": wkt_str,
+        "bufferDistance": 50,  # meters, optional
+        "bufferUnit": "m"      # meters
+    }
+
+    headers = {"x-api-key": "wWdq6qAKQw2dF1G0SW9HDsKs6Km7DcSJ1VATLRckeDVqejGK"}
+    
+    response = requests.get(url, params=params, headers=headers)
+
+    response.raise_for_status()
+
+    data = response.json()
+  
+    landslide = next((haz for haz in data['riskIndexes'][0]['hazards'] if haz['hazardType'] == 'Landslide'), None)
+    if landslide:
+        raw_score = landslide.get('hazardTypeRiskIndex', {}).get('score', 0)
+        normalized_score = raw_score / 100.0 if raw_score > 1 else raw_score
+        return normalized_score
+    return None
+
 def get_lhasaRisk(lat, lon, pad):
     try:
         lhasa_url = "https://maps.nccs.nasa.gov/mapping/rest/services/landslide_viewer/Landslide_Susceptibility_Update_2023/MapServer"
@@ -557,9 +617,35 @@ def get_lhasaRisk(lat, lon, pad):
         print(f"Error getting landslide risk: {e}")
         return 0.0
 
-# -----------------------
-# Earthquake risk aggregator
-# -----------------------
+
+def clamp(x, min_val=0.0, max_val=1.0):
+    return max(min(x, max_val), min_val)
+
+def calculate_landslide_risk(data):
+    """
+    Returns a normalized (0–1) landslide risk score.
+    Uses: lhasaRisk, elevation_m, noaa_precip_mm, nearestWaterbody_km, fema_flood_zone
+    """
+    norm_elev = clamp(1 - math.exp(-data.get("elevation_m", 0) / 800.0))
+    norm_precip = clamp(data.get("noaa_precip_mm", 0) / 2000.0)
+    norm_water = clamp(1 - (data.get("nearestWaterbody_km", 10) / 10.0))
+
+    fema_zone = str(data.get("fema_flood_zone", "X")).upper()
+    fema_weights = {"A": 1.0, "AE": 0.9, "AH": 0.8, "AO": 0.8, "VE": 0.7, "V": 0.7, "X": 0.3}
+    norm_fema = fema_weights.get(fema_zone, 0.5)
+
+    lhasa = clamp(data.get("lhasaRisk", 0))
+
+    risk = (
+        0.40 * lhasa +
+        0.20 * norm_precip +
+        0.20 * norm_elev +
+        0.10 * norm_water +
+        0.10 * norm_fema
+    )
+
+    return clamp(risk)
+
 def safe_sqrt_transform(x, y, z):
     try:
         x = max(0, float(x) if x is not None else 0)
@@ -673,12 +759,14 @@ def risk_summary():
         waterbody = results.get("waterbody")
         aqi = results.get("aqi", "Unknown")
         landslide_risk = results.get("lhasa", 0.0)
-
+        landslide_fema_score = get_landslide_risk_score(lat, lon)
+        if landslide_fema_score is None:
+            landslide_fema_score = 0.0
         # extract zone string robustly
      # extract zone string robustly
         fema_zone = None
         if isinstance(fema_result, dict):
-            fema_zone = fema_result.get("fema_flood_zone")  # ✅ correct key
+            fema_zone = fema_result.get("fema_flood_zone") 
         elif isinstance(fema_result, str):
             fema_zone = fema_result
         else:
@@ -703,7 +791,6 @@ def risk_summary():
         norm_dist = clamp(1 - (float(dist_km) / 10.0))
         norm_elevation = clamp(1 - (float(elevation or 0) / 500.0))
         norm_precip = clamp((float(noaa_precip or 0) / 2000.0))
-
         # Weighted flood risk components
         elev_w, precip_w, fema_w, dist_w = 0.35, 0.25, 0.30, 0.10
         flood_risk = (
@@ -712,6 +799,13 @@ def risk_summary():
             + (norm_fema * fema_w)
             + (norm_dist * dist_w)
         )
+        data = {
+        "landslide_risk": landslide_risk,          # NASA LHASA risk (0–1)
+         "landslide_fema_score": landslide_fema_score,  # FEMA LightBox risk (0–1)
+        "elevation_m": elevation or 0.0,
+        "nearestWaterbody_km": waterbody or 10.0
+        }
+        combined_landslide_score = calculate_combined_landslide_score(data)
 
 
 
@@ -721,6 +815,7 @@ def risk_summary():
             "coordinates": {"lat": lat, "lon": lon},
             "airQualityIndex": aqi,
             "landslideRisk": landslide_risk,
+            "landslideFema": landslide_fema_score,
             "earthquakeRisk": earthquake_risk,
             "faultDistanceNormalized": fault_dis,
             "pgauh": pgauh,
@@ -728,13 +823,14 @@ def risk_summary():
             "riskCategory": risk_category,
             "elevation_m": elevation,
             "noaa_precip_mm": noaa_precip,
-            "fema_flood_zone": fema_zone,               # simple canonical string
-            "fema_flood_raw": fema_result,             # full dict with 'features' for debugging
+            "fema_flood_zone": fema_zone,            
+            "fema_flood_raw": fema_result,             
             "nearestWaterbody_km": dist_km,
             "normalizedElevation": norm_elevation,
             "normalizedPrecipitation": norm_precip,
             "normalizedFEMAZone": norm_fema,
             "normalizedDistanceToWater": norm_dist,
+            "landslide_combined_score": combined_landslide_score,
             "floodRisk": round(float(flood_risk), 3)
         })
 
