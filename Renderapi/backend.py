@@ -565,31 +565,69 @@ def get_riskCategory(lat, lon):
 
 
 def get_landslide_risk_score(lat, lon):
-    # Compose WKT string for the point
-    wkt_str = f"POINT({lon} {lat})"
-    # FEMA/LightBox endpoint for geometry-based risk index query
-    url = "https://api.lightboxre.com/v1/riskindexes/us/geometry"
-    # Set up params
-    params = {
-        "wkt": wkt_str,
-        "bufferDistance": 50,  # meters, optional
-        "bufferUnit": "m"      # meters
-    }
-
-    headers = {"x-api-key": "wWdq6qAKQw2dF1G0SW9HDsKs6Km7DcSJ1VATLRckeDVqejGK"}
-    
-    response = requests.get(url, params=params, headers=headers)
-
-    response.raise_for_status()
-
-    data = response.json()
-  
-    landslide = next((haz for haz in data['riskIndexes'][0]['hazards'] if haz['hazardType'] == 'Landslide'), None)
-    if landslide:
-        raw_score = landslide.get('hazardTypeRiskIndex', {}).get('score', 0)
-        normalized_score = raw_score / 100.0 if raw_score > 1 else raw_score
-        return normalized_score
-    return None
+    """
+    Fetch landslide risk from FEMA/LightBox API.
+    Returns normalized score (0-1) or None if unavailable.
+    """
+    try:
+        wkt_str = f"POINT({lon} {lat})"
+        url = "https://api.lightboxre.com/v1/riskindexes/us/geometry"
+        
+        params = {
+            "wkt": wkt_str,
+            "bufferDistance": 50,
+            "bufferUnit": "m"
+        }
+        
+        headers = {"x-api-key": "wWdq6qAKQw2dF1G0SW9HDsKs6Km7DcSJ1VATLRckeDVqejGK"}
+        
+        response = requests.get(url, params=params, headers=headers, timeout=12)
+        
+        # Check for HTTP errors
+        if response.status_code != 200:
+            print(f"LightBox API returned status {response.status_code}: {response.text[:200]}")
+            return None
+            
+        response.raise_for_status()
+        data = response.json()
+        
+        # Validate response structure
+        if not data or 'riskIndexes' not in data:
+            print(f"LightBox API missing 'riskIndexes' key. Response: {data}")
+            return None
+            
+        if not data['riskIndexes'] or len(data['riskIndexes']) == 0:
+            print("LightBox API returned empty riskIndexes array")
+            return None
+            
+        if 'hazards' not in data['riskIndexes'][0]:
+            print(f"LightBox API missing 'hazards' key. Response: {data['riskIndexes'][0]}")
+            return None
+        
+        # Find landslide hazard
+        landslide = next(
+            (haz for haz in data['riskIndexes'][0]['hazards'] 
+             if haz.get('hazardType') == 'Landslide'), 
+            None
+        )
+        
+        if landslide:
+            raw_score = landslide.get('hazardTypeRiskIndex', {}).get('score', 0)
+            normalized_score = raw_score / 100.0 if raw_score > 1 else raw_score
+            return normalized_score
+            
+        print("No Landslide hazard found in response")
+        return None
+        
+    except requests.exceptions.RequestException as e:
+        print(f"LightBox API request error: {e}")
+        return None
+    except (KeyError, IndexError, TypeError) as e:
+        print(f"LightBox API response parsing error: {e}")
+        return None
+    except Exception as e:
+        print(f"Unexpected error in get_landslide_risk_score: {e}")
+        return None
 
 def get_lhasaRisk(lat, lon, pad):
     try:
