@@ -104,7 +104,6 @@
 	
 	  document.getElementById('wildfire-risk-value').textContent = data2.generalweightedrisk ?? data2.harprobability ?? 'N/A';
 	  document.getElementById('flood-risk-value').textContent = data1.floodRisk ?? 'N/A';
-	  document.getElementById('landslide-risk-value').textContent = "Feature coming soon";
 	  document.getElementById('earthquake-risk-value').textContent =
   		(data1.earthquakeRisk ?? 'N/A');
 
@@ -228,34 +227,104 @@
 			  }
 			});
 			</script>
-	
 	<script>
-		window.addEventListener('DOMContentLoaded', function() {
-  const d1 = JSON.parse(localStorage.getItem('georisk_results_data1') || 'null');
-  if (!d1) return;
-
-  const landslideScore = Number(d1.landslideRisk) || 0;
-  const level = getRiskLevelLandslide(landslideScore);
-
-  const valueEl = document.getElementById('landslide-risk-value');
-  if (valueEl) valueEl.textContent = landslideScore.toFixed(3);
-
-  const levelEl = document.getElementById('landslide-risk-level');
-  if (levelEl) levelEl.textContent = level;
-
-  const detailsEl = document.getElementById('landslide-risk-details');
-  if (detailsEl) detailsEl.innerHTML = landslideNittyGrittyAnalysis(d1);
-
-  const recList = document.getElementById('landslide-rec-list');
-  if (recList) {
-    const recs = [];
-    if (landslideScore > 0.66) recs.push("High landslide risk: avoid construction on steep slopes, improve drainage upslope.");
-    else if (landslideScore > 0.33) recs.push("Medium risk: monitor slope stability and soil saturation.");
-    else recs.push("Low risk: normal monitoring and maintenance recommended.");
-    recList.innerHTML = recs.map(r=>`<li>${r}</li>`).join("");
-  }
-});
-
+	function getRiskLevelLandslide(score) {
+		if (score === null || isNaN(score)) return "N/A";
+		if (score < 0.33) return "Low";
+		if (score < 0.66) return "Medium";
+		return "High";
+	  }
+	  
+	  function landslideNittyGrittyAnalysis(d1) {
+		return `
+		  <p><strong>Model Details:</strong></p>
+		  <ul>
+			<li><b>Slope:</b> ${d1.slope ?? "N/A"}°</li>
+			<li><b>Soil Type:</b> ${d1.soilType ?? "N/A"}</li>
+			<li><b>Annual Precipitation:</b> ${d1.precipitation ?? "N/A"} mm</li>
+			<li><b>Landslide Risk Score:</b> ${d1.landslideRisk ?? "N/A"}</li>
+		  </ul>
+		  <p><em>Landslide risk is computed based on slope, soil type, and precipitation trends.</em></p>
+		`;
+	  }
+	  
+	  function getRiskLevelLandslideExplanation(level) {
+		if (level === "Low") return "Low landslide risk: Slope and soil conditions suggest minimal risk. Continue normal monitoring and maintenance.";
+		if (level === "Medium") return "Medium landslide risk: Notable slope or soil factors present. Monitor stability during heavy rainfall and maintain drainage.";
+		if (level === "High") return "High landslide risk: Significant slope and soil vulnerability. Consult a geotechnical engineer and implement mitigation measures.";
+		return "No explanation available.";
+	  }
+	  
+	  function personalizedLandslideRecommendations(d1) {
+		const recs = [];
+		const landslideScore = Number(d1.landslideRisk) || 0;
+		
+		if (landslideScore > 0.66) {
+		  recs.push("High landslide risk: Avoid construction on steep slopes, improve drainage upslope, and consult a geotechnical engineer for site assessment.");
+		} else if (landslideScore > 0.33) {
+		  recs.push("Medium landslide risk: Monitor slope stability and soil saturation, especially during heavy rainfall periods. Keep drainage systems functional.");
+		} else {
+		  recs.push("Low landslide risk: Normal monitoring and maintenance recommended. Keep drainage systems clear and watch for unusual ground movement.");
+		}
+		
+		if ((Number(d1.slope) || 0) > 30) {
+		  recs.push("Steep slope detected (>30°): Consider retaining walls or slope stabilization measures. Avoid heavy landscaping that could add weight.");
+		}
+		
+		if ((Number(d1.precipitation) || 0) > 1000) {
+		  recs.push("High precipitation area: Ensure proper drainage and consider erosion control measures. Install French drains if necessary.");
+		}
+		
+		const soilType = (d1.soilType || "").toLowerCase();
+		if (soilType.includes("clay") || soilType.includes("silt")) {
+		  recs.push("Soil type indicates higher saturation risk: Monitor ground saturation levels and avoid watering slopes excessively.");
+		}
+		
+		return recs.length ? recs : ["No additional recommendations found for your landslide risk profile."];
+	  }
+	  
+	  // Initialize landslide data display
+	  window.addEventListener('DOMContentLoaded', function() {
+		const d1 = JSON.parse(localStorage.getItem('georisk_results_data1') || 'null');
+		if (!d1) return;
+	  
+		const landslideScore = Number(d1.landslideRisk) || 0;
+		const level = getRiskLevelLandslide(landslideScore);
+	  
+		// Set the risk level in the accordion header
+		const levelEl = document.getElementById('landslide-risk-level');
+		if (levelEl) levelEl.textContent = level;
+	  
+		// Set the detailed analysis with explanation
+		const detailsEl = document.getElementById('landslide-risk-details');
+		if (detailsEl) {
+		  detailsEl.innerHTML = landslideNittyGrittyAnalysis(d1) + 
+			`<p style="margin-top:12px;"><strong>What this means:</strong> ${getRiskLevelLandslideExplanation(level)}</p>`;
+		}
+	  
+		// Set the risk score
+		const scoreEl = document.getElementById('landslide-risk-score');
+		if (scoreEl) scoreEl.textContent = landslideScore.toFixed(3);
+	  
+		// Set the score context
+		const contextEl = document.getElementById('landslide-score-context');
+		if (contextEl) {
+		  contextEl.innerHTML = `<small>Your score is on a 0–1 scale. "${level}" means a score ${
+			level === "Low" ? "under 0.33" : level === "Medium" ? "between 0.33 and 0.66" : "over 0.66"
+		  }.</small>`;
+		}
+	  
+		// Set recommendations
+		const recList = document.getElementById('landslide-rec-list');
+		if (recList) {
+		  const recs = personalizedLandslideRecommendations(d1);
+		  recList.innerHTML = recs.map(r => `<li>${r}</li>`).join("");
+		}
+	  
+		// Update the card value in the features section
+		const valueEl = document.getElementById('landslide-risk-value');
+		if (valueEl) valueEl.textContent = landslideScore.toFixed(3);
+	  });
 	</script>
 	<script>
 		window.addEventListener('DOMContentLoaded', function() {
@@ -268,24 +337,6 @@
 			if (score < 0.66) return "Medium";
 			return "High";
 		  }
-		  function getRiskLevelLandslide(score) {
-			if (score === null || isNaN(score)) return "N/A";
-			if (score < 0.33) return "Low";
-			if (score < 0.66) return "Medium";
-			return "High";
-			}
-
-			function landslideNittyGrittyAnalysis(d1) {
-			return `
-				<p><strong>Slope:</strong> ${d1.slope ?? "N/A"}°</p>
-				<p><strong>Soil Type:</strong> ${d1.soilType ?? "N/A"}</p>
-				<p><strong>Annual Precipitation:</strong> ${d1.precipitation ?? "N/A"} mm</p>
-				<p><strong>Landslide Risk Score:</strong> ${d1.landslideRisk ?? "N/A"}</p>
-				<p><em>Landslide risk is computed based on slope, soil type, and precipitation trends.</em></p>
-			`;
-			}
-
-		
 		  function getRiskLevelFlood(level) {
 			switch(level) {
 			  case "Low": return "Low chance of significant flooding.";
@@ -353,7 +404,7 @@
 		  document.getElementById('flood-param-dist').textContent = d1.nearestWaterbody_km ?? 'N/A';
 		});
 		</script>
-		
+	
 		
 	<script>
 		function personalizedFireRecommendations(data2) {
