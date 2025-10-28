@@ -424,7 +424,7 @@ window.addEventListener('DOMContentLoaded', function() {
 	<script>
 		function personalizedFireRecommendations(data2) {
 		  const recs = [];
-		  if ('burnprob' in data2 && Number(data2.burnprob) > 0.6) {
+		  if ('harprobability' in data2 && Number(data2.harprobability) > 0.6) {
 			recs.push("Ignition risk is high: Eliminate combustible materials near your home and use fire-resistant landscaping. <br>Consider working with local fire officials for property evaluation.");
 		  }
 		  if ('normhurisk' in data2 && Number(data2.normhurisk) > 0.6) {
@@ -491,7 +491,7 @@ window.addEventListener('DOMContentLoaded', function() {
 			function personalizedFloodRecommendations(d1) {
 			  const recs = [];
 			  const score = Number(d1.floodRisk) || 0;
-			  const zone = (d1.floodZone || "").toUpperCase();
+			  const zone = (d1.fema_flood_zone || "").toUpperCase();
 			
 			  if (score > 0.66 || ["A", "AE", "AH", "AO", "VE", "V"].includes(zone)) {
 				recs.push("High flood exposure: Elevate major utilities above expected water levels, install flood vents, and purchase flood insurance if available.");
@@ -557,7 +557,7 @@ window.addEventListener('DOMContentLoaded', function() {
 						<img src="../../Rn983nS94nF3j.com/images/photo-1663086799993-8abf18491-h_mbtyikud.jpg" alt="" style="height: 4.3rem;">
 					</a>
 				</span>
-				<span class="navbar-caption-wrap"><a class="navbar-caption text-secondary text-primary display-5" href="./Georisk_Home.html">Georisk</a></span>
+				<span class="navbar-caption-wrap"><a class="navbar-caption text-secondary text-primary display-5" href="../../index.html">Georisk</a></span>
 			</div>
 			<button class="navbar-toggler" type="button" data-toggle="collapse" data-bs-toggle="collapse" data-target="#navbarSupportedContent" data-bs-target="#navbarSupportedContent" aria-controls="navbarNavAltMarkup" aria-expanded="false" aria-label="Toggle navigation">
 				<div class="hamburger">
@@ -633,25 +633,6 @@ window.addEventListener('DOMContentLoaded', function() {
 						</div>
 					</div>
 					<div id="bootstrap-accordion_3" class="panel-group accordionStyles accordion" role="tablist" aria-multiselectable="true">
-						<div class="card">
-							<div class="card-header" role="tab" id="headingOne">
-								<a role="button" class="panel-title collapsed" data-toggle="collapse" data-bs-toggle="collapse" data-core="" href="#collapse1_3" aria-expanded="false" aria-controls="collapse1">
-									<h6 class="panel-title-edit mbr-semibold mbr-fonts-style mb-0 display-5">Georisk General Home Risk Index™</h6>
-									<span class="sign mbr-iconfont mobi-mbri-arrow-down"></span>
-								</a>
-							</div>
-							<div id="collapse1_3" class="panel-collapse noScroll collapse" role="tabpanel" aria-labelledby="headingOne" data-parent="#accordion" data-bs-parent="#bootstrap-accordion_3">
-								<div class="panel-body">
-									<p class="mbr-fonts-style panel-text display-7">
-										Lorem ipsum dolor sit amet, consectetur adipiscing elit. Fusce vestibulum
-										laoreet tincidunt. Proin et sapien scelerisque, ornare lectus eget, iaculis
-										lectus. Pellentesque viverra molestie tortor. Nunc sed interdum est, in maximus
-										diam. Donec eu tellus dictum, gravida velit et, sagittis arcu. Proin et lectus
-										dapibus. Cras fringilla elit velit placerat tortor mollis cursus.
-									</p>
-								</div>
-							</div>
-						</div>
 						<div class="card">
 							<div class="card-header" role="tab" id="headingFlood">
 							  <a role="button" class="panel-title collapsed" data-toggle="collapse" data-bs-toggle="collapse" href="#collapseFlood" aria-expanded="false" aria-controls="collapseFlood">
@@ -759,25 +740,6 @@ window.addEventListener('DOMContentLoaded', function() {
 							  </div>
 							</div>
 						  </div>						  
-						<div class="card">
-							<div class="card-header" role="tab" id="headingOne">
-								<a role="button" class="panel-title collapsed" data-toggle="collapse" data-bs-toggle="collapse" data-core="" href="#collapse6_3" aria-expanded="false" aria-controls="collapse6">
-									<h6 class="panel-title-edit mbr-semibold mbr-fonts-style mb-0 display-5"></h6>
-									<span class="sign mbr-iconfont mobi-mbri-arrow-down"></span>
-								</a>
-							</div>
-							<div id="collapse6_3" class="panel-collapse noScroll collapse" role="tabpanel" aria-labelledby="headingOne" data-parent="#accordion" data-bs-parent="#bootstrap-accordion_3">
-								<div class="panel-body">
-									<p class="mbr-fonts-style panel-text display-7">
-										Lorem ipsum dolor sit amet, consectetur adipiscing elit. Fusce vestibulum
-										laoreet tincidunt. Proin et sapien scelerisque, ornare lectus eget, iaculis
-										lectus. Pellentesque viverra molestie tortor. Nunc sed interdum est, in maximus
-										diam. Donec eu tellus dictum, gravida velit et, sagittis arcu. Proin et lectus
-										dapibus. Cras fringilla elit velit placerat tortor mollis cursus.
-									</p>
-								</div>
-							</div>
-						</div>
 					</div>
 				</div>
 			</div>
@@ -808,7 +770,7 @@ window.addEventListener('DOMContentLoaded', function() {
 						
 						<h5 class="card-title mbr-fonts-style display-5"><strong>Wildfire Risk</strong></h5>
 						<p class="price mbr-fonts-style display-7">
-							Risk Level:</p>
+							Risk Recomendations:</p>
 							<div class="card-text mbr-fonts-style display-7">
 								<ul id="wildfire-rec-list"></ul>
 							</div>
@@ -824,9 +786,9 @@ window.addEventListener('DOMContentLoaded', function() {
 						
 						<h5 class="card-title mbr-fonts-style display-5"><strong>Flooding Risk</strong></h5>
 						<p class="price mbr-fonts-style display-7">
-							Risk Level:</p>
+							Risk Recomendations:</p>
 						<p class="card-text mbr-fonts-style display-7">
-							a.
+							<ul id="flood-rec-list"></ul>
 						</p>
 						<div class="mbr-section-btn mt-auto"><a class="btn btn-lg btn-primary display-7" href="#">Learn More</a></div>
 					</div>
@@ -838,7 +800,7 @@ window.addEventListener('DOMContentLoaded', function() {
 						
 						<h5 class="card-title mbr-fonts-style display-5"><strong>Earthquake Risk</strong></h5>
 						<!-- inside the Earthquake card -->
-							<p class="price mbr-fonts-style display-7">Risk Level:</p>
+							<p class="price mbr-fonts-style display-7">Risk Recomendations:</p>
 							<div class="card-text mbr-fonts-style display-7">
 							<ul id="eq-rec-list"></ul>
 							</div>
@@ -852,9 +814,9 @@ window.addEventListener('DOMContentLoaded', function() {
 						
 						<h5 class="card-title mbr-fonts-style display-5"><strong>Landslide Risk</strong></h5>
 						<p class="price mbr-fonts-style display-7">
-							Risk Level:</p>
+							Risk Recomendations:</p>
 						<p class="card-text mbr-fonts-style display-7">
-							a
+							<ul id="landslide-rec-list"></ul>
 						</p>
 						<div class="mbr-section-btn mt-auto"><a class="btn btn-lg btn-primary display-7" href="#">Learn More</a></div>
 					</div>
